@@ -1,8 +1,12 @@
-# AGY Identity Bridge
+# Any2Api Bridge
 
 CLIProxyAPI plugin that injects identity headers into requests routed to
-Antigravity or agy2api providers. It also exposes provider matching
+Antigravity, agy2api, or gpt2api providers. It also exposes provider matching
 diagnostics through the CPA Management API.
+
+The internal plugin ID remains `agy-identity-bridge` during this migration
+release so existing CPA configuration keys keep loading. The product, GitHub
+repository, and Go module use the Any2Api Bridge name.
 
 ## What It Does
 
@@ -19,9 +23,10 @@ The plugin does not modify unrelated providers.
 
 Canonical contract and operations notes live in [.docs/README.md](.docs/README.md).
 
-Release 0.2.16 keeps the identity bridge canonical payload stable for agy2api
-while preserving the legacy signing fallback during the transition period and
-adds passive usage telemetry for the mirrored provider.
+Release 0.2.42 keeps the identity bridge canonical payload stable for agy2api
+while preserving the legacy signing fallback during the transition period,
+keeps the internal plugin ID compatible, and adds passive usage telemetry for
+the mirrored provider.
 
 ## CPA Configuration
 
@@ -313,7 +318,7 @@ serves plugin resource routes without management authentication, so account
 labels (native Antigravity auth labels are account emails) are also stripped
 from this projection. Use the authenticated status route when you need them.
 
-The `AGY Identity Bridge` resource is a single dashboard for the mirrored
+The `Any2Api Bridge` resource is a single dashboard for the mirrored
 `ln.Antigravity` path. Its main surface keeps the operational state, live model
 IDs, runtime log, usage filters, token totals, and compact usage analysis
 visible. Provider configuration and deeper usage analysis open in one wider
@@ -374,19 +379,19 @@ Go 1.26 and GCC:
 
 ```sh
 make test
-make build VERSION=0.2.16
+make build VERSION=0.2.42
 ```
 
 The output is:
 
 ```text
-dist/agy-identity-bridge-v0.2.16.so
+dist/agy-identity-bridge-v0.2.42.so
 ```
 
 The GitHub Actions workflow builds and packages:
 
 ```text
-agy-identity-bridge_0.2.16_linux_amd64.zip
+agy-identity-bridge_0.2.42_linux_amd64.zip
 checksums.txt
 ```
 
@@ -397,7 +402,7 @@ Add the registry source to CPA:
 ```yaml
 plugins:
   store-sources:
-    - https://raw.githubusercontent.com/ngojclee/agy-identity-bridge/main/registry.json
+    - https://raw.githubusercontent.com/ngojclee/any2api-bridge/main/registry.json
 ```
 
 After a tagged release, refresh the CPA Plugin Store and restart CPA after

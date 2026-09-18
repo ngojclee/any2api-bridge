@@ -82,7 +82,7 @@ func TestUsageDashboardHTMLIncludesFiltersAndOverview(t *testing.T) {
 		ProviderOriginalEnabled: false,
 	}, normalizeUsageFilter(url.Values{})))
 	for _, expected := range []string{
-		"AGY Usage View",
+		"Any2Api Usage View",
 		"Last 5 hours",
 		"Last 7 days",
 		"Last 30 days",

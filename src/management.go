@@ -32,8 +32,8 @@ func handleManagementRegister() []byte {
 		Resources: []pluginapi.ResourceRoute{
 			{
 				Path:        "/status",
-				Menu:        "AGY Identity Bridge",
-				Description: "Redacted provider matching diagnostics for AGY Identity Bridge.",
+				Menu:        pluginDisplayName,
+				Description: "Redacted provider matching diagnostics for Any2Api Bridge.",
 			},
 			{
 				Path:        "/data",
@@ -50,7 +50,7 @@ func handleManagement(raw []byte) ([]byte, error) {
 			"error": "invalid management request",
 		}), nil
 	}
-	path, isResource, query := normalizeManagementPath(request.Path)
+	path, isResource, query := normalizeManagementPath(request)
 
 	if isResource {
 		switch {
@@ -93,13 +93,21 @@ func handleManagement(raw []byte) ([]byte, error) {
 	}
 }
 
-func normalizeManagementPath(path string) (string, bool, url.Values) {
+func normalizeManagementPath(request pluginapi.ManagementRequest) (string, bool, url.Values) {
 	query := url.Values{}
+	for key, values := range request.Query {
+		query[key] = append([]string(nil), values...)
+	}
 	isResource := false
+	path := request.Path
 	parsed, errParse := url.Parse(path)
 	if errParse == nil {
 		if parsed.RawQuery != "" {
-			query = parsed.Query()
+			for key, values := range parsed.Query() {
+				if _, exists := query[key]; !exists {
+					query[key] = append([]string(nil), values...)
+				}
+			}
 		}
 		path = parsed.Path
 	}
@@ -338,7 +346,7 @@ func dashboardHTML(diagnostics providerDiagnostics, detail bool) string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AGY Identity Bridge</title>
+<title>Any2Api Bridge</title>
 <style>
 :root{--bg:#faf9f5;--panel:#fffdf9;--surface:#f0eee8;--inset:#f6f4ee;--ink:#2d2a26;--ink-2:#6d6760;--ink-3:#a29c95;--line:#e3e1db;--line-2:#d5d2cb;--muted:#8b8680;--success:#10b981;--amber:#d97706;--error:#c65746;--success-bg:#d1fae5;--success-ink:#065f46;--amber-bg:#fef3c7;--amber-ink:#92400e;--error-bg:#c657461a;--error-ink:#8a3a30;--shadow:0 1px 2px #00000014;--radius:8px}
 *{box-sizing:border-box}html{-webkit-text-size-adjust:100%%}body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;font-size:14px;line-height:1.5}
@@ -360,7 +368,7 @@ details{border:1px solid var(--line);border-radius:var(--radius);background:var(
 </head>
 <body>
 <main>
-<div class="page-head"><div class="row between"><div><h1>AGY Identity Bridge</h1><div class="subtitle">Antigravity bridge diagnostics and runtime status</div></div><div class="row">%s%s<button class="button" onclick="location.reload()">Refresh</button></div></div></div>
+<div class="page-head"><div class="row between"><div><h1>Any2Api Bridge</h1><div class="subtitle">Any2Api bridge diagnostics and runtime status</div></div><div class="row">%s%s<button class="button" onclick="location.reload()">Refresh</button></div></div></div>
 <section class="hero">
 <div class="route"><span class="route-node">%s</span><span>&rarr;</span><span class="route-node">%s</span><span>&rarr;</span><span class="route-node">agy2api</span></div>
 <div class="route-state"><div><div class="state-label">Route state</div><p><strong>%s</strong></p></div><span class="pill tone-%s">%s</span></div>
@@ -624,7 +632,7 @@ func providerEditorHTML(data providerEditorData) string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AGY Identity Bridge</title>
+<title>Any2Api Bridge</title>
 <style>
 :root{--bg:#f7f5ef;--panel:#fffdfa;--surface:#f0ede5;--inset:#f8f6f1;--ink:#282521;--ink-2:#69635b;--ink-3:#9b948b;--line:#dfdacf;--line-2:#cfc8bb;--accent:#2563eb;--success:#0f766e;--success-bg:#ccfbf1;--warn:#9a5a00;--warn-bg:#fff0bf;--error:#b44232;--error-bg:#fbe3df;--radius:8px;--shadow:0 1px 2px #00000014}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;font-size:14px;line-height:1.45;overflow-x:hidden}button,input,textarea,select{font:inherit}
@@ -655,7 +663,7 @@ func providerEditorHTML(data providerEditorData) string {
 <body class="%s">
 <div class="shell">
 <main class="content">
-<div class="top"><div class="title"><h1>AGY Identity Bridge</h1><div class="muted">Single dashboard for the mirrored provider and its runtime telemetry</div></div><div class="actions"><button class="btn" id="drawer-toggle" type="button">%s</button><button class="btn" onclick="location.reload()">Refresh</button></div></div>
+<div class="top"><div class="title"><h1>Any2Api Bridge</h1><div class="muted">Single dashboard for the mirrored provider and its runtime telemetry</div></div><div class="actions"><button class="btn" id="drawer-toggle" type="button">%s</button><button class="btn" onclick="location.reload()">Refresh</button></div></div>
 <section class="card"><div class="section-title">Route state</div><div class="metrics">
 <div class="metric"><span>Replacement mode</span><strong id="metric-mode">%s</strong></div>
 <div class="metric"><span>Published models</span><strong id="metric-published">%d</strong></div>

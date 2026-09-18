@@ -232,10 +232,10 @@ func pluginRegistration() registration {
 	return registration{
 		SchemaVersion: pluginabi.SchemaVersion,
 		Metadata: pluginapi.Metadata{
-			Name:             "agy-identity-bridge",
+			Name:             pluginID,
 			Version:          pluginVersion,
 			Author:           "ngojclee",
-			GitHubRepository: "https://github.com/ngojclee/agy-identity-bridge",
+			GitHubRepository: pluginRepositoryURL,
 			ConfigFields: []pluginapi.ConfigField{
 				{
 					Name:        "auto_discover",

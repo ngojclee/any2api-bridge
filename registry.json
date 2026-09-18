@@ -1,9 +1,23 @@
-{  "schema_version": 1,  "plugins": [    {      "id": "agy-identity-bridge",      "name": "AGY Identity Bridge",      "description": "CLIProxyAPI plugin that injects identity headers (X-AGY-Principal, X-AGY-Client-App) into requests going to agy2api/Antigravity providers, enabling per-device connector routing.",      "author": "ngojclee",      "version": "0.2.41",      "repository": "https://github.com/ngojclee/agy-identity-bridge",      "homepage": "https://github.com/ngojclee/agy-identity-bridge",      "license": "MIT",      "tags": [        "Identity",        "Routing",        "Antigravity",        "RequestInterceptor"      ]    }  ]}
-
-
-
-
-
-
-
-
+{
+  "schema_version": 1,
+  "plugins": [
+    {
+      "id": "agy-identity-bridge",
+      "name": "Any2Api Bridge",
+      "description": "CLIProxyAPI bridge that injects signed identity headers for agy2api and gpt2api providers, enabling per-device routing and conversation continuity.",
+      "author": "ngojclee",
+      "version": "0.2.42",
+      "repository": "https://github.com/ngojclee/any2api-bridge",
+      "homepage": "https://github.com/ngojclee/any2api-bridge",
+      "license": "MIT",
+      "tags": [
+        "Identity",
+        "Routing",
+        "Any2API",
+        "Antigravity",
+        "GPT2API",
+        "RequestInterceptor"
+      ]
+    }
+  ]
+}

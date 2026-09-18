@@ -1,4 +1,4 @@
-// Package main implements the agy-identity-bridge CLIProxyAPI plugin.
+// Package main implements the Any2Api Bridge CLIProxyAPI plugin.
 //
 // It intercepts requests matched to Antigravity/agy2api/gpt2api providers and
 // injects signed identity headers so the upstream adapter can resolve the

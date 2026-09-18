@@ -1,4 +1,4 @@
-module github.com/ngojclee/agy-identity-bridge
+module github.com/ngojclee/any2api-bridge
 
 go 1.26.0
 

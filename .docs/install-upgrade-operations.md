@@ -48,7 +48,7 @@ before tagging.
 The CPA Plugin Store reads the registry from:
 
 ```text
-https://raw.githubusercontent.com/ngojclee/agy-identity-bridge/main/registry.json
+https://raw.githubusercontent.com/ngojclee/any2api-bridge/main/registry.json
 ```
 
 `registry.json` must be committed and pushed to `main` for the store to see a new
@@ -65,7 +65,8 @@ the loaded plugin from CPA logs:
 docker logs cli-proxy-api | grep 'plugin loaded plugin_id=agy-identity-bridge' | tail
 ```
 
-The current live loaded version verified on 2026-09-06 is `0.2.41`. After an
+The current live loaded version verified on 2026-09-06 is `0.2.41`; the
+compatibility-preserving Any2Api Bridge rebuild is `0.2.42`. After an
 upgrade, restart or reload CPA and re-check this line before testing behaviour.
 A stale loaded plugin is the most common cause of "the fix is in the repo but the
 bug is still live".
