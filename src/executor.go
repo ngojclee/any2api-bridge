@@ -207,11 +207,15 @@ func identityFromExecutorRequest(req executorRequest) clientIdentity {
 	)
 	if settings.AllowExplicitClientIdentityHeaders {
 		headerPrincipal = firstHeaderValue(req.Headers, "X-AGY-Principal")
-		headerClientApp = firstHeaderValue(req.Headers, "X-AGY-Client-App", "X-AGY-Device")
-		headerInstance = firstHeaderValue(req.Headers, "X-AGY-Client-Instance")
+		headerClientApp = firstHeaderValue(req.Headers, "X-AGY-Client-App", "X-Any2API-Client-App", "X-AGY-Device")
+		headerInstance = firstHeaderValue(req.Headers, "X-AGY-Client-Instance", "X-Any2API-Client-Instance")
 		headerProfile = firstHeaderValue(req.Headers, "X-AGY-Capability-Profile")
 		headerConnectorID = firstHeaderValue(req.Headers, "X-AGY-Connector-Id")
-		headerSessionID = firstHeaderValue(req.Headers, "X-AGY-Session-ID", "X-Session-ID")
+		headerSessionID = firstHeaderValue(req.Headers, "X-AGY-Session-ID", "X-Any2API-Conversation-Id", "X-Session-ID")
+		headerSessionID = firstNonEmpty(
+			headerSessionID,
+			metadataString(req.Metadata, "conversation_id", "conversation-id", "session_id", "session-id", "canonical_session_id", "canonical-session-id"),
+		)
 	}
 	context := clientIdentityContext{
 		Principal:         headerPrincipal,
@@ -253,6 +257,24 @@ func identityHeaders(identity clientIdentity, spec providerSpec, req executorReq
 		if strings.TrimSpace(value) != "" {
 			headers[key] = []string{value}
 		}
+	}
+	if identityHeaderProfileForSpec(spec) == identityHeaderProfileAny2API {
+		ctx := clientIdentityContext{
+			Principal:      identity.Principal,
+			ClientApp:      identity.ClientApp,
+			ClientInstance: identity.ClientInstance,
+			SessionID:      identity.SessionID,
+			Timestamp:      identity.Timestamp,
+		}
+		setIf(any2APIHeaderPrincipal, ctx.Principal)
+		setIf(any2APIHeaderClientApp, ctx.ClientApp)
+		setIf(any2APIHeaderClientInstance, ctx.ClientInstance)
+		setIf(any2APIHeaderConversationID, ctx.SessionID)
+		setIf(any2APIHeaderTimestamp, ctx.Timestamp)
+		if secret := hmacSecretForCandidate(currentPluginSettings(), providerCandidate{APIKey: spec.primaryAPIKey()}); secret != "" && ctx.Principal != "" {
+			headers[any2APIHeaderSignature] = []string{computeHMAC(any2APIIdentitySignatureMessage(ctx), secret)}
+		}
+		return headers
 	}
 	setIf("X-AGY-Principal", identity.Principal)
 	setIf("X-AGY-Client-App", identity.ClientApp)

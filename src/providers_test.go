@@ -209,6 +209,12 @@ func TestProviderMatchingDefaultsAndExplicitRules(t *testing.T) {
 	}); !matched {
 		t.Fatal("agy2api provider did not match automatic discovery")
 	}
+	if matched, _ := defaults.shouldInterceptCandidate(providerCandidate{
+		Name: "gpt2api private gateway",
+		URL:  "https://gpt2api.internal/v1",
+	}); !matched {
+		t.Fatal("gpt2api provider did not match automatic discovery")
+	}
 
 	explicit := PluginSettings{
 		MatchName:   "Antigravity",
@@ -473,6 +479,117 @@ openai-compatibility:
 	}
 	if strings.Contains(string(response), "provider-secret") || strings.Contains(string(response), "client-key") {
 		t.Fatal("response leaked a credential")
+	}
+	if firstHeaderValue(headers, any2APIHeaderPrincipal) != "" || firstHeaderValue(headers, any2APIHeaderSignature) != "" {
+		t.Fatalf("AGY interceptor leaked Any2API headers: %s", response)
+	}
+}
+
+func loadGPT2APIInterceptFixture(t *testing.T) {
+	t.Helper()
+	previous := currentConfigSnapshot()
+	t.Cleanup(func() {
+		applyPluginConfiguration(previous)
+		refreshMatchedRecords(nil)
+	})
+	t.Setenv("CPA_CONFIG_PATH", "Z:\\missing\\cpa-config.yaml")
+	applyPluginConfiguration(loadPluginConfiguration([]byte(`
+plugins:
+  configs:
+    agy-identity-bridge:
+      enabled: true
+      auto_discover: true
+      include_native_antigravity: false
+      hmac_secret_source: config
+      hmac_secret: any2api-signing-secret-0123456789
+openai-compatibility:
+  - name: gpt2api
+    prefix: gpt2api
+    base-url: http://gpt2api.internal/v1
+    api-key-entries:
+      - api-key: provider-secret
+`)))
+	diagnostics := scanProviderDiagnostics()
+	if diagnostics.MatchedRecordCount != 1 {
+		t.Fatalf("matched records = %d, want 1", diagnostics.MatchedRecordCount)
+	}
+}
+
+func TestInterceptAfterUsesAny2APIHeadersForGPT2API(t *testing.T) {
+	loadGPT2APIInterceptFixture(t)
+
+	raw := []byte(`{"ToFormat":"openai","RequestedModel":"gpt2api/gpt-5.6","Headers":{"Authorization":["Bearer client-key"],"X-Any2API-Client-App":["codex"],"X-Any2API-Client-Instance":["desktop-a"],"X-Any2API-Conversation-Id":["conversation-a"]}}`)
+	response, errHandle := handleInterceptAfter(raw)
+	if errHandle != nil {
+		t.Fatal(errHandle)
+	}
+	var decoded struct {
+		OK     bool `json:"ok"`
+		Result struct {
+			Headers map[string][]string `json:"Headers"`
+		} `json:"result"`
+	}
+	if errUnmarshal := json.Unmarshal(response, &decoded); errUnmarshal != nil {
+		t.Fatal(errUnmarshal)
+	}
+	headers := decoded.Result.Headers
+	for _, required := range []string{
+		any2APIHeaderPrincipal,
+		any2APIHeaderClientApp,
+		any2APIHeaderClientInstance,
+		any2APIHeaderConversationID,
+		any2APIHeaderTimestamp,
+		any2APIHeaderSignature,
+	} {
+		if firstHeaderValue(headers, required) == "" {
+			t.Fatalf("missing %s in Any2API interceptor response: %s", required, response)
+		}
+	}
+	for key := range headers {
+		if strings.HasPrefix(strings.ToLower(key), "x-agy-") {
+			t.Fatalf("gpt2api interceptor leaked AGY header %s: %s", key, response)
+		}
+	}
+	message := strings.Join([]string{
+		headers[any2APIHeaderTimestamp][0],
+		headers[any2APIHeaderPrincipal][0],
+		"codex",
+		"desktop-a",
+		"conversation-a",
+	}, "\n")
+	mac := hmac.New(sha256.New, []byte("any2api-signing-secret-0123456789"))
+	mac.Write([]byte(message))
+	expected := hex.EncodeToString(mac.Sum(nil))
+	if !hmac.Equal([]byte(expected), []byte(headers[any2APIHeaderSignature][0])) {
+		t.Fatalf("Any2API signature does not match canonical payload: %s", response)
+	}
+	if strings.Contains(string(response), "provider-secret") || strings.Contains(string(response), "client-key") {
+		t.Fatal("response leaked a credential")
+	}
+}
+
+func TestInterceptAfterOmitsAny2APIConversationWhenCallerDoesNotSupplyOne(t *testing.T) {
+	loadGPT2APIInterceptFixture(t)
+
+	raw := []byte(`{"ToFormat":"openai","RequestedModel":"gpt2api/gpt-5.6","Headers":{"Authorization":["Bearer client-key"],"X-Any2API-Client-App":["codex"]}}`)
+	response, errHandle := handleInterceptAfter(raw)
+	if errHandle != nil {
+		t.Fatal(errHandle)
+	}
+	var decoded struct {
+		OK     bool `json:"ok"`
+		Result struct {
+			Headers map[string][]string `json:"Headers"`
+		} `json:"result"`
+	}
+	if errUnmarshal := json.Unmarshal(response, &decoded); errUnmarshal != nil {
+		t.Fatal(errUnmarshal)
+	}
+	if got := firstHeaderValue(decoded.Result.Headers, any2APIHeaderConversationID); got != "" {
+		t.Fatalf("conversation header = %q, want omitted when caller did not supply one", got)
+	}
+	if firstHeaderValue(decoded.Result.Headers, any2APIHeaderSignature) == "" {
+		t.Fatalf("missing signature with empty conversation field: %s", response)
 	}
 }
 
