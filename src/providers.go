@@ -162,6 +162,8 @@ type providerDiagnostics struct {
 	ReplacementMode          string           `json:"replacement_mode,omitempty"`
 	ProviderOriginalEnabled  bool             `json:"provider_original_enabled"`
 	Agy2apiSecretConfigured  bool             `json:"agy2api_identity_secret_configured"`
+	DirectModeEnabled        bool             `json:"direct_mode_enabled"`
+	DirectAccountCount       int              `json:"direct_account_count"`
 	ModelsServed             bool             `json:"models_served"`
 	LastExecutorStatus       int              `json:"last_executor_status,omitempty"`
 	LastExecutorErrorAt      string           `json:"last_executor_error_at,omitempty"`
@@ -409,6 +411,8 @@ func scanProviderDiagnostics() providerDiagnostics {
 		ExecutorEnabled:          settings.ExecutorEnabled,
 		ExecutorProvider:         settings.ExecutorProvider,
 		ModelNamespace:           settings.ModelNamespace,
+		DirectModeEnabled:        settings.DirectModeEnabled,
+		DirectAccountCount:       len(settings.DirectAccounts),
 		Warnings:                 append([]string(nil), snapshot.Warnings...),
 	}
 
@@ -509,7 +513,12 @@ func scanProviderDiagnostics() providerDiagnostics {
 	}
 	out.ActivePrefixes = uniqueStrings(prefixes)
 
-	if spec, mirrored := resolveProviderSpec(); mirrored {
+	if settings.DirectModeEnabled {
+		if errValidate := validateDirectAccounts(settings.DirectAccounts); errValidate != nil {
+			out.Warnings = append(out.Warnings, errValidate.Error())
+		}
+		out.ReplacementMode = "direct"
+	} else if spec, mirrored := resolveProviderSpec(); mirrored {
 		modelInfos := spec.modelInfos(settings.ModelNamespace)
 		modelsServed := canServeModels(settings, spec)
 		out.MirroredProvider = spec.Name

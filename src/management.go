@@ -29,6 +29,7 @@ func handleManagementRegister() []byte {
 			{Method: http.MethodPost, Path: managementBasePath + "/provider/save"},
 			{Method: http.MethodPost, Path: managementBasePath + "/provider/test"},
 			{Method: http.MethodPost, Path: managementBasePath + "/provider/fetch-models"},
+			{Method: http.MethodGet, Path: managementBasePath + "/direct/accounts"},
 			{Method: http.MethodGet, Path: managementBasePath + "/settings"},
 			{Method: http.MethodPost, Path: managementBasePath + "/rescan"},
 		},
@@ -87,6 +88,8 @@ func handleManagement(raw []byte) ([]byte, error) {
 		return handleProviderTest(request)
 	case request.Method == http.MethodPost && path == "/provider/fetch-models":
 		return handleProviderFetchModels(request)
+	case request.Method == http.MethodGet && path == "/direct/accounts":
+		return managementJSONResponse(http.StatusOK, directAccountsManagementState(currentPluginSettings())), nil
 	case request.Method == http.MethodGet && path == "/settings":
 		return managementJSONResponse(http.StatusOK, managementSettings()), nil
 	case request.Method == http.MethodPost && path == "/rescan":
@@ -165,6 +168,8 @@ func managementSettings() map[string]any {
 		"hmac_secret_configured":                 settings.hmacSecret() != "",
 		"hmac_secret_source":                     settings.hmacSecretSource(),
 		"agy2api_identity_secret_configured":     settings.Agy2apiIdentitySecret != "",
+		"direct_mode_enabled":                    settings.DirectModeEnabled,
+		"direct_account_count":                   len(settings.DirectAccounts),
 		"config_path_found":                      snapshot.ConfigPathFound,
 		"plugin_config_found":                    snapshot.PluginConfigFound,
 		"executor_enabled":                       settings.ExecutorEnabled,
