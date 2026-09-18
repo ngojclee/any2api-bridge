@@ -25,7 +25,7 @@ available only as a rollback path until direct mode is proven live.
 
 ## R6: Direct Account Foundation
 
-Status: DISPATCHING
+Status: ACTIVE
 
 Owner: Dev CPA Plugin - Vision
 
