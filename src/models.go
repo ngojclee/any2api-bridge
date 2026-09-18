@@ -37,6 +37,9 @@ func resolveProviderSpec() (providerSpec, bool) {
 
 func currentModelResponse() modelRegistrationResponse {
 	settings := currentPluginSettings()
+	if settings.DirectModeEnabled {
+		return modelRegistrationResponse{Provider: settings.ExecutorProvider, Models: []modelInfo{}}
+	}
 	spec, found := resolveProviderSpec()
 	if !found || !canServeModels(settings, spec) {
 		return modelRegistrationResponse{Provider: settings.ExecutorProvider, Models: []modelInfo{}}
