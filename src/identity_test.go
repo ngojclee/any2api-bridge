@@ -91,6 +91,27 @@ func TestComputeHMAC(t *testing.T) {
 	}
 }
 
+func TestAny2APISignatureMessageUsesExactGatewayContract(t *testing.T) {
+	identity := clientIdentityContext{
+		Timestamp:      "1788516317",
+		Principal:      "principal-hash",
+		ClientApp:      "codex",
+		ClientInstance: "desktop-a",
+		SessionID:      "conversation-a",
+	}
+	want := "1788516317\nprincipal-hash\ncodex\ndesktop-a\nconversation-a"
+	if got := any2APIIdentitySignatureMessage(identity); got != want {
+		t.Fatalf("Any2API signature message = %q, want %q", got, want)
+	}
+
+	identity.ClientInstance = ""
+	identity.SessionID = ""
+	want = "1788516317\nprincipal-hash\ncodex\n\n"
+	if got := any2APIIdentitySignatureMessage(identity); got != want {
+		t.Fatalf("Any2API empty optional fields = %q, want %q", got, want)
+	}
+}
+
 func TestDeriveStablePrincipalUsesExplicitClientIdentity(t *testing.T) {
 	settings := PluginSettings{AllowExplicitClientIdentityHeaders: true}
 	payload := InterceptRequestPayload{
@@ -114,6 +135,28 @@ func TestDeriveStablePrincipalUsesExplicitClientIdentity(t *testing.T) {
 	}
 	if first.PrincipalSource != "explicit" {
 		t.Fatalf("principal source = %q, want explicit", first.PrincipalSource)
+	}
+}
+
+func TestDeriveClientIdentityAcceptsAny2APIConversationAlias(t *testing.T) {
+	settings := PluginSettings{AllowExplicitClientIdentityHeaders: true}
+	payload := InterceptRequestPayload{
+		Headers: map[string][]string{
+			"X-Any2API-Client-App":      {"codex"},
+			"X-Any2API-Client-Instance": {"desktop-a"},
+			"X-Any2API-Conversation-Id": {"conversation-a"},
+		},
+	}
+	identity := deriveClientIdentityFromIntercept(payload, settings)
+	if identity.ClientApp != "codex" || identity.ClientInstance != "desktop-a" || identity.SessionID != "conversation-a" {
+		t.Fatalf("Any2API aliases not captured: %+v", identity)
+	}
+
+	payload.Headers = map[string][]string{"User-Agent": {"Codex/1.0"}}
+	payload.Metadata = map[string]any{"canonical_session_id": "conversation-from-metadata"}
+	identity = deriveClientIdentityFromIntercept(payload, settings)
+	if identity.SessionID != "conversation-from-metadata" {
+		t.Fatalf("canonical session metadata not captured: %+v", identity)
 	}
 }
 

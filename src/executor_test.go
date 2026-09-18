@@ -268,7 +268,69 @@ func TestBuildUpstreamRequestAttachesIdentityHeaders(t *testing.T) {
 	if upstream.Headers["X-AGY-Signature"][0] != expectedSig {
 		t.Fatalf("signature = %q, want %q", upstream.Headers["X-AGY-Signature"][0], expectedSig)
 	}
+	if firstHeaderValue(upstream.Headers, any2APIHeaderPrincipal) != "" || firstHeaderValue(upstream.Headers, any2APIHeaderSignature) != "" {
+		t.Fatalf("AGY upstream request leaked Any2API headers: %+v", upstream.Headers)
+	}
 	// The client's own bearer key must never be forwarded upstream.
+	for key, values := range upstream.Headers {
+		for _, value := range values {
+			if key != "Authorization" && strings.Contains(value, "client-key") {
+				t.Fatalf("client credential leaked into %s: %q", key, value)
+			}
+		}
+	}
+}
+
+func TestBuildUpstreamRequestUsesAny2APIHeadersForGPT2API(t *testing.T) {
+	settings := defaultPluginSettings()
+	settings.HMACSecretSource = "config"
+	settings.HMACSecret = "any2api-executor-secret"
+	withSettings(t, settings)
+	spec := providerSpec{
+		Name:    "gpt2api",
+		Prefix:  "gpt2api",
+		BaseURL: "http://gpt2api.internal/v1",
+		APIKeys: []string{"provider-secret"},
+	}
+	req, errParse := parseExecutorRequest([]byte(`{"Model":"gpt-5.6","Format":"openai","Stream":false,"Headers":{"Authorization":["Bearer client-key"],"X-Any2API-Client-App":["codex"],"X-Any2API-Client-Instance":["desktop-a"],"X-Any2API-Conversation-Id":["conversation-a"]},"Payload":"e30=","HostCallbackID":"cb-1"}`))
+	if errParse != nil {
+		t.Fatal(errParse)
+	}
+	identity := identityFromExecutorRequest(req)
+	if identity.ClientApp != "codex" || identity.ClientInstance != "desktop-a" || identity.SessionID != "conversation-a" {
+		t.Fatalf("Any2API identity not captured from client headers: %+v", identity)
+	}
+	upstream, errBuild := buildUpstreamRequest(req, spec, identity)
+	if errBuild != nil {
+		t.Fatal(errBuild)
+	}
+	for _, required := range []string{
+		any2APIHeaderPrincipal,
+		any2APIHeaderClientApp,
+		any2APIHeaderClientInstance,
+		any2APIHeaderConversationID,
+		any2APIHeaderTimestamp,
+		any2APIHeaderSignature,
+	} {
+		if firstHeaderValue(upstream.Headers, required) == "" {
+			t.Fatalf("missing %s in Any2API upstream request: %+v", required, upstream.Headers)
+		}
+	}
+	for key := range upstream.Headers {
+		if strings.HasPrefix(strings.ToLower(key), "x-agy-") {
+			t.Fatalf("gpt2api upstream request leaked AGY header %s: %+v", key, upstream.Headers)
+		}
+	}
+	expectedSig := computeHMAC(any2APIIdentitySignatureMessage(clientIdentityContext{
+		Timestamp:      upstream.Headers[any2APIHeaderTimestamp][0],
+		Principal:      upstream.Headers[any2APIHeaderPrincipal][0],
+		ClientApp:      "codex",
+		ClientInstance: "desktop-a",
+		SessionID:      "conversation-a",
+	}), hmacSecretForCandidate(currentPluginSettings(), providerCandidate{APIKey: spec.primaryAPIKey()}))
+	if upstream.Headers[any2APIHeaderSignature][0] != expectedSig {
+		t.Fatalf("Any2API signature = %q, want %q", upstream.Headers[any2APIHeaderSignature][0], expectedSig)
+	}
 	for key, values := range upstream.Headers {
 		for _, value := range values {
 			if key != "Authorization" && strings.Contains(value, "client-key") {
