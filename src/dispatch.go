@@ -240,7 +240,7 @@ func pluginRegistration() registration {
 				{
 					Name:        "auto_discover",
 					Type:        pluginapi.ConfigFieldTypeBoolean,
-					Description: "When true, match native Antigravity or provider names/URLs containing antigravity or agy2api when no explicit rule is set. Default true.",
+					Description: "When true, match native Antigravity or provider names/URLs containing antigravity, agy2api, or gpt2api when no explicit rule is set. Default true.",
 				},
 				{
 					Name:        "include_native_antigravity",
@@ -291,7 +291,7 @@ func pluginRegistration() registration {
 				{
 					Name:        "allow_explicit_client_identity_headers",
 					Type:        pluginapi.ConfigFieldTypeBoolean,
-					Description: "Allow trusted client identity headers such as X-AGY-Client-App, X-AGY-Client-Instance, and X-AGY-Connector-Id to influence principal derivation. Default true.",
+					Description: "Allow trusted client identity headers such as X-AGY-Client-App, X-Any2API-Client-App, X-AGY-Client-Instance, X-Any2API-Client-Instance, and X-AGY-Connector-Id to influence principal derivation. Default true.",
 				},
 				{
 					Name:        "principal_fallback_mode",
@@ -323,7 +323,7 @@ func pluginRegistration() registration {
 				{
 					Name:        "executor_enabled",
 					Type:        pluginapi.ConfigFieldTypeBoolean,
-					Description: "Serve the mirrored provider from this plugin instead of CLIProxyAPI, so identity headers reach agy2api. Default false, which keeps routing unchanged.",
+					Description: "Serve the mirrored provider from this plugin instead of CLIProxyAPI, so signed identity headers reach agy2api or gpt2api. Default false, which keeps routing unchanged.",
 				},
 				{
 					Name:        "executor_provider",
@@ -384,6 +384,12 @@ func handleInterceptAfter(request []byte) ([]byte, error) {
 	}
 	identity.ProviderName = candidate.Name
 	recordIntercept(candidate, identity)
+
+	if identityHeaderProfileForCandidate(candidate) == identityHeaderProfileAny2API {
+		return okEnvelope(InterceptResponsePayload{
+			Headers: any2APIIdentityHeaders(identity, settings, candidate),
+		}), nil
+	}
 
 	headers := map[string][]string{
 		"X-AGY-Principal":         {identity.Principal},
