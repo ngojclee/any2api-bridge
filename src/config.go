@@ -740,9 +740,10 @@ func (s PluginSettings) shouldInterceptCandidate(candidate providerCandidate) (b
 		if candidate.ResolvedPrefix != "" {
 			return true, []string{"model-prefix:" + candidate.ResolvedPrefix}
 		}
-		if anyTextMatch([]string{"*antigravity*", "*agy2api*"}, nameValues) ||
+		if anyTextMatch([]string{"*antigravity*", "*agy2api*", "*gpt2api*"}, nameValues) ||
 			matchText("*antigravity*", candidate.URL) ||
-			matchText("*agy2api*", candidate.URL) {
+			matchText("*agy2api*", candidate.URL) ||
+			matchText("*gpt2api*", candidate.URL) {
 			return true, []string{"auto-discovery"}
 		}
 		return false, nil
@@ -845,7 +846,7 @@ func uniqueStrings(values []string) []string {
 
 func providerNameMatchesAutoDiscovery(value string) bool {
 	value = strings.ToLower(strings.TrimSpace(value))
-	return strings.Contains(value, "antigravity") || strings.Contains(value, "agy2api")
+	return strings.Contains(value, "antigravity") || strings.Contains(value, "agy2api") || strings.Contains(value, "gpt2api")
 }
 
 func isNativeAntigravity(value string) bool {

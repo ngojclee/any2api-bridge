@@ -36,11 +36,11 @@ func deriveClientIdentityFromIntercept(payload InterceptRequestPayload, settings
 		headerSessionID   string
 	)
 	if settings.AllowExplicitClientIdentityHeaders {
-		headerClientApp = firstHeaderValue(headers, "X-AGY-Client-App")
-		headerInstance = firstHeaderValue(headers, "X-AGY-Client-Instance")
+		headerClientApp = firstHeaderValue(headers, "X-AGY-Client-App", "X-Any2API-Client-App")
+		headerInstance = firstHeaderValue(headers, "X-AGY-Client-Instance", "X-Any2API-Client-Instance")
 		headerProfile = firstHeaderValue(headers, "X-AGY-Capability-Profile")
 		headerConnectorID = firstHeaderValue(headers, "X-AGY-Connector-Id")
-		headerSessionID = firstHeaderValue(headers, "X-AGY-Session-ID", "X-Session-ID")
+		headerSessionID = firstHeaderValue(headers, "X-AGY-Session-ID", "X-Any2API-Conversation-Id", "X-Session-ID")
 	}
 	context := clientIdentityContext{
 		ClientApp:         headerClientApp,
@@ -63,6 +63,10 @@ func deriveClientIdentityFromIntercept(payload InterceptRequestPayload, settings
 			context.ConnectorID,
 			metadataString(metadata, "connector_id", "connector-id"),
 		)
+		context.SessionID = firstNonEmpty(
+			context.SessionID,
+			metadataString(metadata, "conversation_id", "conversation-id", "session_id", "session-id", "canonical_session_id", "canonical-session-id"),
+		)
 		context.ExplicitIdentity = strings.TrimSpace(context.ClientApp) != "" ||
 			strings.TrimSpace(context.ClientInstance) != "" ||
 			strings.TrimSpace(context.CapabilityProfile) != "" ||
@@ -83,15 +87,19 @@ func deriveClientIdentityFromExecutor(req executorRequest) clientIdentityContext
 	}
 	context := clientIdentityContext{
 		Principal:         firstHeaderValue(headers, "X-AGY-Principal"),
-		ClientApp:         firstHeaderValue(headers, "X-AGY-Client-App"),
-		ClientInstance:    firstHeaderValue(headers, "X-AGY-Client-Instance"),
+		ClientApp:         firstHeaderValue(headers, "X-AGY-Client-App", "X-Any2API-Client-App"),
+		ClientInstance:    firstHeaderValue(headers, "X-AGY-Client-Instance", "X-Any2API-Client-Instance"),
 		CapabilityProfile: firstHeaderValue(headers, "X-AGY-Capability-Profile"),
 		ConnectorID:       firstHeaderValue(headers, "X-AGY-Connector-Id"),
-		SessionID:         firstHeaderValue(headers, "X-AGY-Session-ID", "X-Session-ID"),
+		SessionID:         firstHeaderValue(headers, "X-AGY-Session-ID", "X-Any2API-Conversation-Id", "X-Session-ID"),
 		ProviderName:      firstHeaderValue(headers, "X-AGY-CPA-Provider-Name", "X-AGY-Provider"),
 		Timestamp:         firstHeaderValue(headers, "X-AGY-Timestamp"),
 		ExplicitIdentity:  true,
 	}
+	context.SessionID = firstNonEmpty(
+		context.SessionID,
+		metadataString(req.Metadata, "conversation_id", "conversation-id", "session_id", "session-id", "canonical_session_id", "canonical-session-id"),
+	)
 	if context.Timestamp == "" {
 		context.Timestamp = strconv.FormatInt(time.Now().UTC().Unix(), 10)
 	}
@@ -201,6 +209,16 @@ func identitySignatureMessage(identity clientIdentityContext, method, path strin
 		"connector_id=" + strings.TrimSpace(identity.ConnectorID),
 		"method=" + strings.TrimSpace(method),
 		"path=" + strings.TrimSpace(path),
+	}, "\n")
+}
+
+func any2APIIdentitySignatureMessage(identity clientIdentityContext) string {
+	return strings.Join([]string{
+		strings.TrimSpace(identity.Timestamp),
+		strings.TrimSpace(identity.Principal),
+		strings.TrimSpace(identity.ClientApp),
+		strings.TrimSpace(identity.ClientInstance),
+		strings.TrimSpace(identity.SessionID),
 	}, "\n")
 }
 
