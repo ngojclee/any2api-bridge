@@ -14,6 +14,7 @@ to discover it.
 | [streaming-and-errors.md](streaming-and-errors.md) | `execute` vs `execute_stream`, progressive bridge, SSE framing, keepalive/tool frames, non-2xx stream-start handling, `empty_stream` diagnosis, timeout chain | `src/executor.go`, `src/hostcalls.go`, agy2api `app/api/routes.py`, and CPA plugin host bridge source |
 | [install-upgrade-operations.md](install-upgrade-operations.md) | release workflow, Plugin Store update, reload verification, model cache behavior, rollback, bounded smoke tests | `Makefile`, `.github/workflows/build.yml`, `registry.json`, `src/modelcache.go`, `src/management.go`, and live CPA logs |
 | [provider-model-routing.md](provider-model-routing.md) | provider ownership, model registration, family aliases, image lane pass-through, no unrelated aliases, no cross-effort fallback | `src/providerspec.go`, `src/models.go`, `src/executor.go`, `src/management.go`, and tests |
+| Direct account foundation (R6) | opt-in direct mode, bounded account metadata, CPA channel payload adapter, model catalog parser, dynamic header selection | `src/direct_accounts.go`, `src/direct_channels.go`, `src/config.go`, `src/dispatch.go`, and tests |
 
 ## Verified Baseline
 

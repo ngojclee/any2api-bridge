@@ -173,11 +173,15 @@ func configurePlugin(raw []byte) error {
 	// The mirrored provider record can change when CPA config changes, so the
 	// cache is dropped and rebuilt from the freshly loaded config.
 	storeProviderSpec(providerSpec{}, false)
-	spec, mirrored := resolveProviderSpec()
 	settings := currentPluginSettings()
+	spec := providerSpec{}
+	mirrored := false
+	if !settings.DirectModeEnabled {
+		spec, mirrored = resolveProviderSpec()
+	}
 
 	authEnsured := false
-	if settings.ExecutorEnabled && mirrored {
+	if !settings.DirectModeEnabled && settings.ExecutorEnabled && mirrored {
 		if errAuth := ensureAuthRecord(spec, settings); errAuth != nil {
 			// Non-fatal: the plugin still registers and models still list.
 			// Without an auth record, requests routed to this executor will
@@ -321,6 +325,16 @@ func pluginRegistration() registration {
 					Description: "Dedicated HMAC secret matching agy2api AGY_IDENTITY_BRIDGE_SECRET. Takes priority over hmac_secret and AGY_PLUGIN_SECRET. Write-only: never returned by GET settings.",
 				},
 				{
+					Name:        "direct_mode_enabled",
+					Type:        pluginapi.ConfigFieldTypeBoolean,
+					Description: "Opt-in direct account mode. When true, Any2Api Bridge injects dynamic identity headers into ordinary CPA openai-compatibility channels and does not register a plugin executor.",
+				},
+				{
+					Name:        "direct_accounts",
+					Type:        pluginapi.ConfigFieldTypeArray,
+					Description: "Direct account metadata for agy2api and gpt2api channels. Secrets are write-only through management flows and never returned by read endpoints.",
+				},
+				{
 					Name:        "executor_enabled",
 					Type:        pluginapi.ConfigFieldTypeBoolean,
 					Description: "Serve the mirrored provider from this plugin instead of CLIProxyAPI, so signed identity headers reach agy2api or gpt2api. Default false, which keeps routing unchanged.",
@@ -350,6 +364,9 @@ func registrationCapabilities() registrationCapability {
 		ManagementAPI:      true,
 	}
 	settings := currentPluginSettings()
+	if settings.DirectModeEnabled {
+		return capabilities
+	}
 	spec, mirrored := cachedProviderSpec()
 	if settings.ExecutorEnabled && mirrored && canServeModels(settings, spec) {
 		capabilities.ModelRegistrar = true
@@ -372,6 +389,23 @@ func handleInterceptAfter(request []byte) ([]byte, error) {
 	if !settings.Enabled {
 		return okEnvelope(InterceptResponsePayload{}), nil
 	}
+	if settings.DirectModeEnabled {
+		account, matched := resolveDirectAccountForPayload(payload, settings)
+		if !matched {
+			return okEnvelope(InterceptResponsePayload{}), nil
+		}
+		identity := deriveClientIdentityFromIntercept(payload, settings)
+		if identity.Principal == "" {
+			recordDashboardEvent("warning", "Client request matched a direct account but no stable identity could be derived")
+			return okEnvelope(InterceptResponsePayload{}), nil
+		}
+		identity.ProviderName = account.ChannelName
+		candidate := directAccountProviderCandidate(account)
+		recordIntercept(candidate, identity)
+		return okEnvelope(InterceptResponsePayload{
+			Headers: directAccountIdentityHeaders(account, identity, settings, payload),
+		}), nil
+	}
 	candidate := candidateFromPayload(payload, settings)
 	matched, _ := settings.shouldInterceptCandidate(candidate)
 	if !matched {
@@ -390,33 +424,10 @@ func handleInterceptAfter(request []byte) ([]byte, error) {
 			Headers: any2APIIdentityHeaders(identity, settings, candidate),
 		}), nil
 	}
-
-	headers := map[string][]string{
-		"X-AGY-Principal":         {identity.Principal},
-		"X-AGY-Timestamp":         {identity.Timestamp},
-		"X-AGY-Client-App":        {identity.ClientApp},
-		"X-AGY-Plugin-Version":    {pluginVersion},
-		"X-AGY-CPA-Provider-Name": {candidate.Name},
-	}
-	if identity.ClientInstance != "" {
-		headers["X-AGY-Client-Instance"] = []string{identity.ClientInstance}
-	}
-	if identity.CapabilityProfile != "" {
-		headers["X-AGY-Capability-Profile"] = []string{identity.CapabilityProfile}
-	}
-	if identity.ConnectorID != "" {
-		headers["X-AGY-Connector-Id"] = []string{identity.ConnectorID}
-	}
-	if secret := hmacSecretForCandidate(settings, candidate); secret != "" {
-		// The interceptor must sign the endpoint the request will actually
-		// reach, using the same helper the executor uses. Signing a fixed
-		// chat path makes agy2api reject every non-chat request whenever
-		// signature enforcement is on and the executor is not serving it.
-		spec, _ := resolveProviderSpec()
-		headers["X-AGY-Signature"] = []string{computeHMAC(identitySignatureMessage(identity, "POST",
-			signedUpstreamPath(payload.Model, payload.ToFormat, "", requestPathFromMetadata(payload.Metadata), spec)), secret)}
-	}
-	return okEnvelope(InterceptResponsePayload{Headers: headers}), nil
+	spec, _ := resolveProviderSpec()
+	return okEnvelope(InterceptResponsePayload{
+		Headers: agyIdentityHeaders(identity, settings, candidate, payload, spec),
+	}), nil
 }
 
 func extractBearerToken(headers map[string][]string) string {

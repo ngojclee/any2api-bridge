@@ -26,24 +26,26 @@ const (
 // the HMAC secret so a provider credential cannot be exposed accidentally by
 // diagnostics or used for signing unless that mode is explicitly selected.
 type PluginSettings struct {
-	Enabled                            bool     `yaml:"enabled" json:"enabled"`
-	Priority                           int      `yaml:"priority" json:"priority"`
-	AutoDiscover                       bool     `yaml:"auto_discover" json:"auto_discover"`
-	IncludeNativeAntigravity           bool     `yaml:"include_native_antigravity" json:"include_native_antigravity"`
-	AllowExplicitClientIdentityHeaders bool     `yaml:"allow_explicit_client_identity_headers" json:"allow_explicit_client_identity_headers"`
-	PrincipalFallbackMode              string   `yaml:"principal_fallback_mode" json:"principal_fallback_mode"`
-	DebugLogging                       bool     `yaml:"debug_logging" json:"debug_logging"`
-	MatchMode                          string   `yaml:"match_mode" json:"match_mode"`
-	MatchName                          string   `yaml:"match_name" json:"match_name"`
-	MatchURL                           string   `yaml:"match_url" json:"match_url"`
-	MatchAPIKey                        string   `yaml:"match_api_key" json:"match_api_key"`
-	MatchProvider                      string   `yaml:"match_provider" json:"match_provider"`
-	MatchProviders                     []string `yaml:"match_providers" json:"match_providers"`
-	MatchModel                         string   `yaml:"match_model" json:"match_model"`
-	MatchModels                        []string `yaml:"match_models" json:"match_models"`
-	HMACSecret                         string   `yaml:"hmac_secret" json:"hmac_secret"`
-	HMACSecretSource                   string   `yaml:"hmac_secret_source" json:"hmac_secret_source"`
-	Agy2apiIdentitySecret              string   `yaml:"agy2api_identity_secret" json:"agy2api_identity_secret"`
+	Enabled                            bool            `yaml:"enabled" json:"enabled"`
+	Priority                           int             `yaml:"priority" json:"priority"`
+	AutoDiscover                       bool            `yaml:"auto_discover" json:"auto_discover"`
+	IncludeNativeAntigravity           bool            `yaml:"include_native_antigravity" json:"include_native_antigravity"`
+	AllowExplicitClientIdentityHeaders bool            `yaml:"allow_explicit_client_identity_headers" json:"allow_explicit_client_identity_headers"`
+	PrincipalFallbackMode              string          `yaml:"principal_fallback_mode" json:"principal_fallback_mode"`
+	DebugLogging                       bool            `yaml:"debug_logging" json:"debug_logging"`
+	MatchMode                          string          `yaml:"match_mode" json:"match_mode"`
+	MatchName                          string          `yaml:"match_name" json:"match_name"`
+	MatchURL                           string          `yaml:"match_url" json:"match_url"`
+	MatchAPIKey                        string          `yaml:"match_api_key" json:"match_api_key"`
+	MatchProvider                      string          `yaml:"match_provider" json:"match_provider"`
+	MatchProviders                     []string        `yaml:"match_providers" json:"match_providers"`
+	MatchModel                         string          `yaml:"match_model" json:"match_model"`
+	MatchModels                        []string        `yaml:"match_models" json:"match_models"`
+	HMACSecret                         string          `yaml:"hmac_secret" json:"hmac_secret"`
+	HMACSecretSource                   string          `yaml:"hmac_secret_source" json:"hmac_secret_source"`
+	Agy2apiIdentitySecret              string          `yaml:"agy2api_identity_secret" json:"agy2api_identity_secret"`
+	DirectModeEnabled                  bool            `yaml:"direct_mode_enabled" json:"direct_mode_enabled"`
+	DirectAccounts                     []directAccount `yaml:"direct_accounts" json:"direct_accounts"`
 
 	// Executor mode makes this plugin the caller for the mirrored provider, so
 	// identity headers survive to agy2api. Disabled by default: installing a
@@ -122,6 +124,7 @@ func normalizeSettings(s PluginSettings) PluginSettings {
 	s.MatchModel = strings.TrimSpace(s.MatchModel)
 	s.HMACSecret = strings.TrimSpace(s.HMACSecret)
 	s.Agy2apiIdentitySecret = strings.TrimSpace(s.Agy2apiIdentitySecret)
+	s.DirectAccounts = normalizeDirectAccounts(s.DirectAccounts)
 
 	seen := make(map[string]struct{}, len(s.MatchProviders)+1)
 	providers := make([]string, 0, len(s.MatchProviders)+1)
@@ -401,6 +404,8 @@ func findPluginConfig(root map[string]any) (map[string]any, bool) {
 		"hmac_secret",
 		"hmac_secret_source",
 		"agy2api_identity_secret",
+		"direct_mode_enabled",
+		"direct_accounts",
 		"executor_enabled",
 		"executor_provider",
 		"model_namespace",
@@ -500,6 +505,12 @@ func settingsFromMap(base PluginSettings, raw map[string]any) PluginSettings {
 	}
 	if value, ok := stringValue(raw, "agy2api_identity_secret", "agy2api-identity-secret"); ok {
 		base.Agy2apiIdentitySecret = value
+	}
+	if value, ok := boolValue(raw, "direct_mode_enabled", "direct-mode-enabled", "direct_mode", "direct-mode"); ok {
+		base.DirectModeEnabled = value
+	}
+	if value, ok := mapValue(raw, "direct_accounts", "direct-accounts"); ok {
+		base.DirectAccounts = directAccountsFromAny(value)
 	}
 	if value, ok := boolValue(raw, "executor_enabled", "executor-enabled"); ok {
 		base.ExecutorEnabled = value
