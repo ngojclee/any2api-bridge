@@ -15,7 +15,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const managementBasePath = "/plugins/" + pluginID
+const (
+	managementBasePath       = "/plugins/" + pluginID
+	legacyManagementBasePath = "/plugins/" + legacyPluginID
+)
 
 func handleManagementRegister() []byte {
 	return okEnvelope(pluginapi.ManagementRegistrationResponse{
@@ -111,13 +114,26 @@ func normalizeManagementPath(request pluginapi.ManagementRequest) (string, bool,
 		}
 		path = parsed.Path
 	}
-	if index := strings.Index(path, "/v0/resource/plugins/"+pluginID); index >= 0 {
-		path = path[index+len("/v0/resource/plugins/"+pluginID):]
-		isResource = true
-	} else if index := strings.Index(path, "/v0/management/plugins/"+pluginID); index >= 0 {
-		path = path[index+len("/v0/management/plugins/"+pluginID):]
-	} else if strings.HasPrefix(path, managementBasePath) {
-		path = strings.TrimPrefix(path, managementBasePath)
+	for _, id := range []string{pluginID, legacyPluginID} {
+		if index := strings.Index(path, "/v0/resource/plugins/"+id); index >= 0 {
+			path = path[index+len("/v0/resource/plugins/"+id):]
+			isResource = true
+			break
+		}
+	}
+	if !isResource {
+		for _, id := range []string{pluginID, legacyPluginID} {
+			if index := strings.Index(path, "/v0/management/plugins/"+id); index >= 0 {
+				path = path[index+len("/v0/management/plugins/"+id):]
+				break
+			}
+		}
+		for _, prefix := range []string{managementBasePath, legacyManagementBasePath} {
+			if strings.HasPrefix(path, prefix) {
+				path = strings.TrimPrefix(path, prefix)
+				break
+			}
+		}
 	}
 	if path == "" {
 		path = "/"
@@ -1383,7 +1399,7 @@ func testProviderModel(spec providerSpec, apiKey, model string, index int) provi
 	req := executorRequest{
 		Model: result.Model,
 		Headers: map[string][]string{
-			"User-Agent": {"agy-identity-bridge-dashboard"},
+			"User-Agent": {"any2api-bridge-dashboard"},
 		},
 	}
 	identity := identityFromExecutorRequest(req)
@@ -1391,7 +1407,7 @@ func testProviderModel(spec providerSpec, apiKey, model string, index int) provi
 		"Authorization": {"Bearer " + apiKey},
 		"Content-Type":  {"application/json"},
 		"Accept":        {"application/json"},
-		"User-Agent":    {"agy-identity-bridge-dashboard"},
+		"User-Agent":    {"any2api-bridge-dashboard"},
 	}
 	for key, values := range identityHeaders(identity, testSpec, req, "POST", endpoint) {
 		headers[key] = values
@@ -1444,11 +1460,11 @@ func probeProviderModelSpecs(spec providerSpec) (int, []modelSpec, error) {
 	headers := map[string][]string{
 		"Authorization": {"Bearer " + spec.primaryAPIKey()},
 		"Accept":        {"application/json"},
-		"User-Agent":    {"agy-identity-bridge-dashboard"},
+		"User-Agent":    {"any2api-bridge-dashboard"},
 	}
 	identityRequest := executorRequest{
 		Headers: map[string][]string{
-			"User-Agent": {"agy-identity-bridge-dashboard"},
+			"User-Agent": {"any2api-bridge-dashboard"},
 		},
 	}
 	identity := identityFromExecutorRequest(identityRequest)
@@ -1729,7 +1745,35 @@ func replaceOpenAICompatEntry(root map[string]any, index int, provider map[strin
 func ensurePluginConfig(root map[string]any) map[string]any {
 	plugins := ensureMap(root, "plugins")
 	configs := ensureMap(plugins, "configs")
-	return ensureMap(configs, pluginID)
+	var current map[string]any
+	var legacy map[string]any
+	if existing, found := mapValueByNormalizedKey(configs, pluginID); found {
+		current = asMap(existing)
+	}
+	if existing, found := mapValueByNormalizedKey(configs, legacyPluginID); found {
+		legacy = asMap(existing)
+	}
+	switch {
+	case current != nil && legacy != nil:
+		current = mergePluginConfig(legacy, current)
+	case current == nil && legacy != nil:
+		current = cloneAnyMap(legacy)
+	case current == nil:
+		current = map[string]any{}
+	}
+	configs[pluginID] = current
+	return current
+}
+
+func cloneAnyMap(value map[string]any) map[string]any {
+	if value == nil {
+		return map[string]any{}
+	}
+	out := make(map[string]any, len(value))
+	for key, item := range value {
+		out[key] = item
+	}
+	return out
 }
 
 func ensureMap(parent map[string]any, key string) map[string]any {

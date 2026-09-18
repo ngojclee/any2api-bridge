@@ -73,7 +73,7 @@ func marshalHostPayload(payload any) ([]byte, error) {
 func hostLog(level, message string, fields map[string]any) {
 	payload := map[string]any{
 		"level":   level,
-		"message": "agy-identity-bridge: " + message,
+		"message": "any2api-bridge: " + message,
 	}
 	if len(fields) > 0 {
 		payload["fields"] = fields

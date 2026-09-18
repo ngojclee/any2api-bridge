@@ -198,8 +198,8 @@ func TestPluginRegistration(t *testing.T) {
 	if !reg.Capabilities.RequestInterceptor {
 		t.Errorf("RequestInterceptor capability should be true")
 	}
-	if reg.Metadata.Name != "agy-identity-bridge" {
-		t.Errorf("plugin name = %q, want agy-identity-bridge", reg.Metadata.Name)
+	if reg.Metadata.Name != pluginID {
+		t.Errorf("plugin name = %q, want %s", reg.Metadata.Name, pluginID)
 	}
 }
 

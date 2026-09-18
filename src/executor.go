@@ -86,7 +86,7 @@ func executorAuthJSON(spec providerSpec, settings PluginSettings) ([]byte, error
 		// token tracker joins provider + label and shows duplicated names such
 		// as ln.Antigravity-ln.Antigravity. A stable pseudo-email keeps the
 		// label distinct while never exposing a credential.
-		"email":  "agy-identity-bridge@local",
+		"email":  "any2api-bridge@local",
 		"prefix": modelNamespace(settings.ModelNamespace, spec.Prefix),
 	})
 	if errMarshal != nil {
@@ -576,7 +576,7 @@ func buildUpstreamRequest(req executorRequest, spec providerSpec, identity clien
 	payload := stripPayloadModelPrefix(req.Payload, settingsModelPrefix(currentPluginSettings(), spec))
 	headers := map[string][]string{
 		"Authorization": {fmt.Sprintf("Bearer %s", spec.primaryAPIKey())},
-		"User-Agent":    {"agy-identity-bridge-executor"},
+		"User-Agent":    {"any2api-bridge-executor"},
 	}
 	// The inbound content type has to survive the hop. CPA rewrites multipart
 	// image edits into its own multipart body with a fresh boundary, so

@@ -4,9 +4,9 @@ CLIProxyAPI plugin that injects identity headers into requests routed to
 Antigravity, agy2api, or gpt2api providers. It also exposes provider matching
 diagnostics through the CPA Management API.
 
-The internal plugin ID remains `agy-identity-bridge` during this migration
-release so existing CPA configuration keys keep loading. The product, GitHub
-repository, and Go module use the Any2Api Bridge name.
+The plugin ID is now `any2api-bridge`. The legacy
+`agy-identity-bridge` config key is still accepted during migration, so an
+existing CPA configuration can be loaded and migrated by the next save.
 
 ## What It Does
 
@@ -23,10 +23,21 @@ The plugin does not modify unrelated providers.
 
 Canonical contract and operations notes live in [.docs/README.md](.docs/README.md).
 
-Release 0.2.42 keeps the identity bridge canonical payload stable for agy2api
+Release 0.3.0 keeps the identity bridge canonical payload stable for agy2api
 while preserving the legacy signing fallback during the transition period,
-keeps the internal plugin ID compatible, and adds passive usage telemetry for
-the mirrored provider.
+adds the renamed `any2api-bridge` plugin identity, and keeps passive usage
+telemetry for the mirrored provider.
+
+### Migration from `agy-identity-bridge`
+
+1. Back up CPA `config.yaml`.
+2. Install/update to `any2api-bridge` `v0.3.0`.
+3. Keep the old `plugins.configs.agy-identity-bridge` block long enough for the
+   new plugin to merge it, or manually rename the key to
+   `plugins.configs.any2api-bridge`.
+4. Disable/remove the old `agy-identity-bridge` plugin file after the new plugin
+   is effective so both copies cannot publish the same models.
+5. Restart or reload CPA and verify the plugin list shows `any2api-bridge`.
 
 ## CPA Configuration
 
@@ -36,7 +47,7 @@ Use the canonical CPA shape:
 plugins:
   enabled: true
   configs:
-    agy-identity-bridge:
+    any2api-bridge:
       enabled: true
       priority: 100
       auto_discover: true
@@ -110,7 +121,7 @@ Executor mode removes that limitation by making this plugin the caller.
 ```yaml
 plugins:
   configs:
-    agy-identity-bridge:
+    any2api-bridge:
       executor_enabled: true
       executor_provider: ln.Antigravity
       model_namespace: "spike."
@@ -235,7 +246,7 @@ The legacy `hmac_secret_source` selector still exists for compatibility:
 ```yaml
 plugins:
   configs:
-    agy-identity-bridge:
+    any2api-bridge:
       hmac_secret_source: env
 ```
 
@@ -275,14 +286,14 @@ the original would take those models offline.
 Authenticated Management API routes:
 
 ```text
-GET  /v0/management/plugins/agy-identity-bridge/status
-GET  /v0/management/plugins/agy-identity-bridge/provider
-GET  /v0/management/plugins/agy-identity-bridge/provider/config
-POST /v0/management/plugins/agy-identity-bridge/provider/save
-POST /v0/management/plugins/agy-identity-bridge/provider/test
-POST /v0/management/plugins/agy-identity-bridge/provider/fetch-models
-GET  /v0/management/plugins/agy-identity-bridge/settings
-POST /v0/management/plugins/agy-identity-bridge/rescan
+GET  /v0/management/plugins/any2api-bridge/status
+GET  /v0/management/plugins/any2api-bridge/provider
+GET  /v0/management/plugins/any2api-bridge/provider/config
+POST /v0/management/plugins/any2api-bridge/provider/save
+POST /v0/management/plugins/any2api-bridge/provider/test
+POST /v0/management/plugins/any2api-bridge/provider/fetch-models
+GET  /v0/management/plugins/any2api-bridge/settings
+POST /v0/management/plugins/any2api-bridge/rescan
 ```
 
 The status response reports:
@@ -307,9 +318,9 @@ diagnosed without guessing.
 CPA also exposes a redacted browser resource:
 
 ```text
-/v0/resource/plugins/agy-identity-bridge/status
-/v0/resource/plugins/agy-identity-bridge/provider
-/v0/resource/plugins/agy-identity-bridge/usage
+/v0/resource/plugins/any2api-bridge/status
+/v0/resource/plugins/any2api-bridge/provider
+/v0/resource/plugins/any2api-bridge/usage
 ```
 
 These resources intentionally omit config paths, URLs, auth indexes, and
@@ -359,7 +370,7 @@ application installation.
 The `Configured`, `Registered`, and `Inactive` labels in CPA Manager describe
 the host lifecycle, not provider matching:
 
-- `Configured`: `plugins.configs.agy-identity-bridge` exists in `config.yaml`.
+- `Configured`: `plugins.configs.any2api-bridge` exists in `config.yaml`.
 - `Registered`: CPA loaded the dynamic library and accepted
   `plugin.register`.
 - `Effective`: global `plugins.enabled`, per-plugin `enabled`, and
@@ -379,19 +390,19 @@ Go 1.26 and GCC:
 
 ```sh
 make test
-make build VERSION=0.2.42
+make build VERSION=0.3.0
 ```
 
 The output is:
 
 ```text
-dist/agy-identity-bridge-v0.2.42.so
+dist/any2api-bridge-v0.3.0.so
 ```
 
 The GitHub Actions workflow builds and packages:
 
 ```text
-agy-identity-bridge_0.2.42_linux_amd64.zip
+any2api-bridge_0.3.0_linux_amd64.zip
 checksums.txt
 ```
 

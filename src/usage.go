@@ -87,25 +87,39 @@ func resetUsageState() {
 // the natural place for this small JSON file. Falls back to the working
 // directory if the config path is unavailable.
 func usageDataPath() string {
+	return usageDataPathWithName("any2api-bridge-usage.json")
+}
+
+func legacyUsageDataPath() string {
+	return usageDataPathWithName("agy-identity-bridge-usage.json")
+}
+
+func usageDataPathWithName(name string) string {
 	for _, candidate := range []string{
 		"/CLIProxyAPI/plugins",
 		os.Getenv("CPA_CONFIG_PATH"),
 	} {
 		dir := strings.TrimSpace(candidate)
 		if info, errStat := os.Stat(dir); errStat == nil && info.IsDir() {
-			return filepath.Join(dir, "agy-identity-bridge-usage.json")
+			return filepath.Join(dir, name)
 		}
 		if dir != "" && dir != "." {
-			return filepath.Join(dir, "agy-identity-bridge-usage.json")
+			return filepath.Join(dir, name)
 		}
 	}
-	return "agy-identity-bridge-usage.json"
+	return name
 }
 
 func loadUsageState() {
-	path := usageDataPath()
-	raw, errRead := os.ReadFile(path)
-	if errRead != nil {
+	var raw []byte
+	for _, path := range []string{usageDataPath(), legacyUsageDataPath()} {
+		read, errRead := os.ReadFile(path)
+		if errRead == nil {
+			raw = read
+			break
+		}
+	}
+	if len(raw) == 0 {
 		return
 	}
 	var records []usageRecord

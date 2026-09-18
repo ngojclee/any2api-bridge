@@ -21,8 +21,8 @@ Verified on 2026-09-06 from current source and live read-only checks:
 
 | Component | Baseline |
 | --- | --- |
-| CPA plugin repo | `v0.2.42`, repository `ngojclee/any2api-bridge` |
-| CPA plugin loaded live | `Any2Api Bridge version=0.2.42` (internal ID still `agy-identity-bridge`) |
+| CPA plugin repo | `v0.3.0`, repository `ngojclee/any2api-bridge` |
+| CPA plugin loaded live | `any2api-bridge version=0.3.0` |
 | CPA core live | `v7.2.151`, commit `5208aec` |
 | agy2api live | `1.10.40.202609061250` |
 | agy2api timeout chain live | `hub_call_seconds=660`, `cli_subprocess_seconds=780`, `chat_stream_cap_seconds=810`, `nested=true`, `clamped=false` |

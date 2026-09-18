@@ -12,15 +12,15 @@ import (
 )
 
 const (
-	// pluginID stays stable so existing CPA configs continue to load.
-	pluginID = "agy-identity-bridge"
-
+	pluginID            = "any2api-bridge"
+	legacyPluginID      = "agy-identity-bridge"
 	pluginDisplayName   = "Any2Api Bridge"
 	pluginRepositoryURL = "https://github.com/ngojclee/any2api-bridge"
 )
 
 // PluginSettings contains the plugin-owned configuration under
-// plugins.configs.agy-identity-bridge.
+// plugins.configs.any2api-bridge. The legacy agy-identity-bridge key is still
+// accepted during migration.
 //
 // MatchAPIKey is only a provider selector. It is deliberately separate from
 // the HMAC secret so a provider credential cannot be exposed accidentally by
@@ -357,35 +357,27 @@ func findPluginConfig(root map[string]any) (map[string]any, bool) {
 		if pluginMap := asMap(plugins); pluginMap != nil {
 			if configs, ok := mapValue(pluginMap, "configs"); ok {
 				if configMap := asMap(configs); configMap != nil {
-					if cfg, found := mapValueByNormalizedKey(configMap, pluginID); found {
-						if result := asMap(cfg); result != nil {
-							return result, true
-						}
+					if result, found := findPluginConfigEntry(configMap); found {
+						return result, true
 					}
 				}
 			}
-			if cfg, found := mapValueByNormalizedKey(pluginMap, pluginID); found {
-				if result := asMap(cfg); result != nil {
-					return result, true
-				}
+			if result, found := findPluginConfigEntry(pluginMap); found {
+				return result, true
 			}
 		}
 	}
 
 	if configs, ok := mapValue(root, "configs"); ok {
 		if configMap := asMap(configs); configMap != nil {
-			if cfg, found := mapValueByNormalizedKey(configMap, pluginID); found {
-				if result := asMap(cfg); result != nil {
-					return result, true
-				}
+			if result, found := findPluginConfigEntry(configMap); found {
+				return result, true
 			}
 		}
 	}
 
-	if cfg, found := mapValueByNormalizedKey(root, pluginID); found {
-		if result := asMap(cfg); result != nil {
-			return result, true
-		}
+	if result, found := findPluginConfigEntry(root); found {
+		return result, true
 	}
 
 	// A direct plugin subtree has at least one plugin-owned key. Do not treat a
@@ -418,6 +410,37 @@ func findPluginConfig(root map[string]any) (map[string]any, bool) {
 		}
 	}
 	return nil, false
+}
+
+func findPluginConfigEntry(container map[string]any) (map[string]any, bool) {
+	if container == nil {
+		return nil, false
+	}
+	var current map[string]any
+	var legacy map[string]any
+	if cfg, found := mapValueByNormalizedKey(container, pluginID); found {
+		current = asMap(cfg)
+	}
+	if cfg, found := mapValueByNormalizedKey(container, legacyPluginID); found {
+		legacy = asMap(cfg)
+	}
+	switch {
+	case current != nil && legacy != nil:
+		return mergePluginConfig(legacy, current), true
+	case current != nil:
+		return current, true
+	case legacy != nil:
+		return legacy, true
+	}
+	return nil, false
+}
+
+func mergePluginConfig(legacy, current map[string]any) map[string]any {
+	merged := cloneAnyMap(legacy)
+	for key, value := range current {
+		merged[key] = value
+	}
+	return merged
 }
 
 func settingsFromMap(base PluginSettings, raw map[string]any) PluginSettings {
