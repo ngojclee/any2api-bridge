@@ -25,7 +25,7 @@ available only as a rollback path until direct mode is proven live.
 
 ## R6: Direct Account Foundation
 
-Status: ACTIVE
+Status: DONE, merged at `48ad75c`
 
 Owner: Dev CPA Plugin - Vision
 
@@ -40,6 +40,18 @@ Goal:
 
 Tracked handoff:
 `.docs/session_handoffs/r6/cpa-direct-accounts.md`
+
+## R6 Review Result
+
+Accepted and merged into `main` at `48ad75c`. Verified on `main` after merge:
+`go test ./...` ok and `go vet ./...` clean. Added
+`src/direct_accounts.go`, `src/direct_channels.go`, focused tests, a
+`direct_mode_enabled` opt-in flag, and a redacted JSON boundary at
+`GET /v0/management/plugins/any2api-bridge/direct/accounts`.
+
+Legacy mirror behavior remains the default, so this merge does not change live
+routing. Direct mode still needs a later live round against a real CPA channel
+before any migration.
 
 ## Planned Follow-up
 
