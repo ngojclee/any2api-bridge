@@ -2,8 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"net/url"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/router-for-me/CLIProxyAPI/v7/sdk/pluginapi"
 )
 
 func TestProviderEditorHTMLHasManagementKeyGateAndProviderControls(t *testing.T) {
@@ -94,6 +98,83 @@ func TestUnifiedDashboardContainsUsageFiltersAndDrawerAnalytics(t *testing.T) {
 		strings.Count(page, `name="bucket"`) != 2 ||
 		strings.Count(page, `name="source"`) != 2 {
 		t.Fatalf("dashboard should expose filters in main content and drawer")
+	}
+}
+
+func TestNormalizeManagementPathReadsTypedQuery(t *testing.T) {
+	path, isResource, query := normalizeManagementPath(pluginapi.ManagementRequest{
+		Path: "/v0/resource/plugins/agy-identity-bridge/status",
+		Query: url.Values{
+			"period": {"last_7_days"},
+			"bucket": {"week"},
+			"source": {"hermes"},
+		},
+	})
+
+	if path != "/status" || !isResource {
+		t.Fatalf("normalized path = %q resource=%v", path, isResource)
+	}
+	if query.Get("period") != "last_7_days" ||
+		query.Get("bucket") != "week" ||
+		query.Get("source") != "hermes" {
+		t.Fatalf("typed query was not preserved: %+v", query)
+	}
+}
+
+func TestUsageFilterDrivesAllAnalysisPanels(t *testing.T) {
+	resetUsageState()
+	t.Cleanup(resetUsageState)
+
+	now := time.Now().UTC()
+	usageState.Lock()
+	usageState.records = []usageRecord{
+		{
+			At:           now.Add(-2 * time.Hour),
+			Model:        "gemini-3.7-flash-high",
+			ClientApp:    "hermes",
+			TotalTokens:  100,
+			CacheHit:     true,
+			PromptTokens: 80,
+		},
+		{
+			At:           now.Add(-2 * time.Hour),
+			Model:        "gemini-3.6-flash-high",
+			ClientApp:    "codex",
+			TotalTokens:  50,
+			PromptTokens: 40,
+		},
+		{
+			At:           now.Add(-8 * 24 * time.Hour),
+			Model:        "gemini-3.7-flash-high",
+			ClientApp:    "hermes",
+			TotalTokens:  25,
+			PromptTokens: 20,
+		},
+	}
+	usageState.Unlock()
+
+	filter := normalizeUsageFilter(url.Values{
+		"period": {"last_7_days"},
+		"bucket": {"week"},
+		"source": {"hermes"},
+	})
+	page := providerEditorHTML(providerEditorData{
+		Usage: usageDashboardData(providerDiagnostics{}, filter),
+	})
+
+	for _, expected := range []string{
+		"Last 7 days / By week / hermes",
+		`<option value="last_7_days" selected>`,
+		`<option value="week" selected>`,
+		`<option value="hermes" selected>`,
+		"gemini-3.7-flash-high",
+	} {
+		if !strings.Contains(page, expected) {
+			t.Fatalf("filtered dashboard missing %q", expected)
+		}
+	}
+	if strings.Contains(page, "gemini-3.6-flash-high") {
+		t.Fatalf("filtered dashboard leaked a model outside the selected source/period")
 	}
 }
 

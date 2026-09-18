@@ -11,7 +11,13 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const pluginID = "agy-identity-bridge"
+const (
+	// pluginID stays stable so existing CPA configs continue to load.
+	pluginID = "agy-identity-bridge"
+
+	pluginDisplayName   = "Any2Api Bridge"
+	pluginRepositoryURL = "https://github.com/ngojclee/any2api-bridge"
+)
 
 // PluginSettings contains the plugin-owned configuration under
 // plugins.configs.agy-identity-bridge.

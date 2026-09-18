@@ -1069,7 +1069,7 @@ func usageDashboardHTML(data usagePageData) string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AGY Usage View</title>
+<title>Any2Api Usage View</title>
 <style>
 :root{--bg:#faf9f5;--panel:#fffdf9;--surface:#f1eee8;--inset:#f6f3ec;--ink:#2c2925;--ink-2:#6d6760;--ink-3:#a29c95;--line:#e3e0da;--line-2:#d4d0c8;--accent:#2563eb;--success:#0f766e;--warn:#a16207;--radius:8px;--shadow:0 1px 2px #00000014}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;font-size:14px;line-height:1.45}
@@ -1125,7 +1125,7 @@ a{color:inherit;text-decoration:none}
 <div class="shell">
 <main class="content">
 <div class="top">
-<div class="title"><h1>AGY Usage View</h1><div class="muted">Passive usage telemetry from agy2api responses. No request routing changes, no secret exposure.</div></div>
+<div class="title"><h1>Any2Api Usage View</h1><div class="muted">Passive usage telemetry from Any2Api providers. No request routing changes, no secret exposure.</div></div>
 <div class="actions">
 <a class="btn" href="/v0/resource/plugins/%s/status">Back to status</a>
 <a class="btn" href="/v0/resource/plugins/%s/provider">Provider view</a>

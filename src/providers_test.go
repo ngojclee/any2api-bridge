@@ -824,7 +824,7 @@ func TestManagementRegistrationDeclaresStatusAndConfigFields(t *testing.T) {
 
 	raw := handleManagementRegister()
 	text := string(raw)
-	for _, required := range []string{"/status", "AGY Identity Bridge", "rescan"} {
+	for _, required := range []string{"/status", "Any2Api Bridge", "rescan"} {
 		if !strings.Contains(text, required) {
 			t.Fatalf("management registration missing %q: %s", required, text)
 		}

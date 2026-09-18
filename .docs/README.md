@@ -1,4 +1,4 @@
-# AGY Identity Bridge Docs
+# Any2Api Bridge Docs
 
 This directory is the canonical contract and operations index for the CPA plugin.
 The root `README.md` remains the broad project introduction and configuration
@@ -21,8 +21,8 @@ Verified on 2026-09-06 from current source and live read-only checks:
 
 | Component | Baseline |
 | --- | --- |
-| CPA plugin repo | `v0.2.41`, commit `59801020684fba2ce28a70f8df879758020af854` |
-| CPA plugin loaded live | `agy-identity-bridge version=0.2.41` |
+| CPA plugin repo | `v0.2.42`, repository `ngojclee/any2api-bridge` |
+| CPA plugin loaded live | `Any2Api Bridge version=0.2.42` (internal ID still `agy-identity-bridge`) |
 | CPA core live | `v7.2.151`, commit `5208aec` |
 | agy2api live | `1.10.40.202609061250` |
 | agy2api timeout chain live | `hub_call_seconds=660`, `cli_subprocess_seconds=780`, `chat_stream_cap_seconds=810`, `nested=true`, `clamped=false` |
