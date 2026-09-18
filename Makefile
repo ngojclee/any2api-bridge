@@ -1,7 +1,7 @@
-VERSION ?= 0.2.42
+VERSION ?= 0.3.0
 GO ?= go
-PLUGIN_ID = agy-identity-bridge
-OUT = dist/agy-identity-bridge-v$(VERSION).so
+PLUGIN_ID = any2api-bridge
+OUT = dist/any2api-bridge-v$(VERSION).so
 ARCHIVE = dist/$(PLUGIN_ID)_$(VERSION)_linux_amd64.zip
 
 .PHONY: build test clean

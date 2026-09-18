@@ -12,7 +12,10 @@ import (
 // endpoint. The cache lets the plugin serve models even when the original
 // provider entry is removed from CPA config, and keeps the list fresh without
 // re-discovering it from a disabled or deleted provider block.
-const modelCacheFileName = "agy-identity-bridge-models.json"
+const (
+	modelCacheFileName       = "any2api-bridge-models.json"
+	legacyModelCacheFileName = "agy-identity-bridge-models.json"
+)
 
 type modelCache struct {
 	FetchedAt time.Time     `json:"fetched_at"`
@@ -33,9 +36,23 @@ func modelCachePath() string {
 	return filepath.Join(filepath.Dir(usageDataPath()), modelCacheFileName)
 }
 
+func legacyModelCachePath() string {
+	return filepath.Join(filepath.Dir(usageDataPath()), legacyModelCacheFileName)
+}
+
+func readModelCache() []byte {
+	for _, path := range []string{modelCachePath(), legacyModelCachePath()} {
+		raw, errRead := os.ReadFile(path)
+		if errRead == nil {
+			return raw
+		}
+	}
+	return nil
+}
+
 func loadModelCache() []string {
-	raw, errRead := os.ReadFile(modelCachePath())
-	if errRead != nil {
+	raw := readModelCache()
+	if len(raw) == 0 {
 		return nil
 	}
 	var cache modelCache
@@ -52,8 +69,8 @@ func loadModelCache() []string {
 }
 
 func loadModelCatalog() []modelSpec {
-	raw, errRead := os.ReadFile(modelCachePath())
-	if errRead != nil {
+	raw := readModelCache()
+	if len(raw) == 0 {
 		return nil
 	}
 	var cache modelCache

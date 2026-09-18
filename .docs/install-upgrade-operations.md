@@ -10,9 +10,9 @@ Bump the version in three places together, in one commit:
 
 | File | Field | Example |
 | --- | --- | --- |
-| `src/version.go` | `pluginVersion` | `0.2.42-dev` |
-| `Makefile` | `VERSION ?=` | `0.2.42` |
-| `registry.json` | `plugins[0].version` | `0.2.42` |
+| `src/version.go` | `pluginVersion` | `0.3.0-dev` |
+| `Makefile` | `VERSION ?=` | `0.3.0` |
+| `registry.json` | `plugins[0].version` | `0.3.0` |
 
 The `-dev` suffix in `src/version.go` is the local default. CI overwrites it with
 `-ldflags "-X main.pluginVersion=..."` from the tag, so the shipped binary reports
@@ -31,9 +31,9 @@ git push origin main --tags
 `.github/workflows/build.yml` runs on tag pushes matching `v*` on
 `ubuntu-latest` with Go 1.26. It:
 
-1. builds a Linux amd64 `agy-identity-bridge.so` with
+1. builds a Linux amd64 `any2api-bridge.so` with
    `-X main.pluginVersion=${GITHUB_REF_NAME#v}`,
-2. packages `agy-identity-bridge_<version>_linux_amd64.zip`,
+2. packages `any2api-bridge_<version>_linux_amd64.zip`,
 3. writes `<zip>.sha256` and `dist/checksums.txt`,
 4. uploads the zip, its sha256, and checksums.txt to the GitHub Release via
    `softprops/action-gh-release`.
@@ -62,11 +62,11 @@ The registry and the release asset are not proof of what CPA is running. Confirm
 the loaded plugin from CPA logs:
 
 ```text
-docker logs cli-proxy-api | grep 'plugin loaded plugin_id=agy-identity-bridge' | tail
+docker logs cli-proxy-api | grep 'plugin loaded plugin_id=any2api-bridge' | tail
 ```
 
 The current live loaded version verified on 2026-09-06 is `0.2.41`; the
-compatibility-preserving Any2Api Bridge rebuild is `0.2.42`. After an
+Any2Api Bridge identity migration is `0.3.0`. After an
 upgrade, restart or reload CPA and re-check this line before testing behaviour.
 A stale loaded plugin is the most common cause of "the fix is in the repo but the
 bug is still live".
@@ -76,7 +76,7 @@ bug is still live".
 The plugin persists the upstream model list so it can keep serving models even
 when the original provider block is removed or emptied.
 
-- File: `agy-identity-bridge-models.json`.
+- File: `any2api-bridge-models.json`.
 - Location: the same directory as the usage file, under the CPA plugins data dir.
 - Contents: a flat `models` list plus a richer `catalog` carrying image flag,
   thinking levels, and input/output modalities per model.

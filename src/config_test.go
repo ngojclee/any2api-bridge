@@ -110,3 +110,34 @@ agy2api_identity_secret: dedicated-secret
 		t.Fatalf("agy2api_identity_secret = %q, want dedicated-secret", settings.Agy2apiIdentitySecret)
 	}
 }
+
+func TestEnsurePluginConfigMigratesLegacyPluginID(t *testing.T) {
+	root := map[string]any{
+		"plugins": map[string]any{
+			"configs": map[string]any{
+				legacyPluginID: map[string]any{
+					"auto_discover": false,
+					"match_name":    "GPT2API",
+				},
+				pluginID: map[string]any{
+					"enabled": true,
+				},
+			},
+		},
+	}
+
+	config := ensurePluginConfig(root)
+	if config["match_name"] != "GPT2API" {
+		t.Fatalf("legacy plugin config was not merged: %+v", config)
+	}
+	if config["auto_discover"] != false {
+		t.Fatalf("legacy setting was not preserved: %+v", config)
+	}
+	if config["enabled"] != true {
+		t.Fatalf("new plugin setting did not win: %+v", config)
+	}
+	configs := asMap(asMap(root["plugins"])["configs"])
+	if _, found := configs[pluginID]; !found {
+		t.Fatalf("new plugin config key %q was not created", pluginID)
+	}
+}

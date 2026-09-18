@@ -39,7 +39,7 @@ The published list is `spec.Models`, resolved in this precedence:
 
 1. The mirrored provider's `models:` array in CPA `config.yaml`, when present.
    This is authoritative for a live provider.
-2. The persisted model cache (`agy-identity-bridge-models.json`) when the matched
+2. The persisted model cache (`any2api-bridge-models.json`) when the matched
    provider is disabled and its `models:` array is empty, or when the provider
    block has been removed entirely.
 

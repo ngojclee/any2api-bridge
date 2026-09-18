@@ -2,11 +2,11 @@
   "schema_version": 1,
   "plugins": [
     {
-      "id": "agy-identity-bridge",
+      "id": "any2api-bridge",
       "name": "Any2Api Bridge",
       "description": "CLIProxyAPI bridge that injects signed identity headers for agy2api and gpt2api providers, enabling per-device routing and conversation continuity.",
       "author": "ngojclee",
-      "version": "0.2.42",
+      "version": "0.3.0",
       "repository": "https://github.com/ngojclee/any2api-bridge",
       "homepage": "https://github.com/ngojclee/any2api-bridge",
       "license": "MIT",

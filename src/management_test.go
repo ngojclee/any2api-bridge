@@ -35,7 +35,7 @@ func TestProviderEditorHTMLHasManagementKeyGateAndProviderControls(t *testing.T)
 		"same identity headers as the executor",
 		"drawer-close",
 		"Save",
-		"/v0/management/plugins/agy-identity-bridge",
+		"/v0/management/plugins/any2api-bridge",
 	} {
 		if !strings.Contains(page, expected) {
 			t.Fatalf("provider editor page missing %q", expected)
@@ -102,22 +102,24 @@ func TestUnifiedDashboardContainsUsageFiltersAndDrawerAnalytics(t *testing.T) {
 }
 
 func TestNormalizeManagementPathReadsTypedQuery(t *testing.T) {
-	path, isResource, query := normalizeManagementPath(pluginapi.ManagementRequest{
-		Path: "/v0/resource/plugins/agy-identity-bridge/status",
-		Query: url.Values{
-			"period": {"last_7_days"},
-			"bucket": {"week"},
-			"source": {"hermes"},
-		},
-	})
+	for _, pluginPathID := range []string{pluginID, legacyPluginID} {
+		path, isResource, query := normalizeManagementPath(pluginapi.ManagementRequest{
+			Path: "/v0/resource/plugins/" + pluginPathID + "/status",
+			Query: url.Values{
+				"period": {"last_7_days"},
+				"bucket": {"week"},
+				"source": {"hermes"},
+			},
+		})
 
-	if path != "/status" || !isResource {
-		t.Fatalf("normalized path = %q resource=%v", path, isResource)
-	}
-	if query.Get("period") != "last_7_days" ||
-		query.Get("bucket") != "week" ||
-		query.Get("source") != "hermes" {
-		t.Fatalf("typed query was not preserved: %+v", query)
+		if path != "/status" || !isResource {
+			t.Fatalf("%s normalized path = %q resource=%v", pluginPathID, path, isResource)
+		}
+		if query.Get("period") != "last_7_days" ||
+			query.Get("bucket") != "week" ||
+			query.Get("source") != "hermes" {
+			t.Fatalf("%s typed query was not preserved: %+v", pluginPathID, query)
+		}
 	}
 }
 
