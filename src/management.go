@@ -29,7 +29,12 @@ func handleManagementRegister() []byte {
 			{Method: http.MethodPost, Path: managementBasePath + "/provider/save"},
 			{Method: http.MethodPost, Path: managementBasePath + "/provider/test"},
 			{Method: http.MethodPost, Path: managementBasePath + "/provider/fetch-models"},
+			{Method: http.MethodGet, Path: managementBasePath + "/direct"},
 			{Method: http.MethodGet, Path: managementBasePath + "/direct/accounts"},
+			{Method: http.MethodGet, Path: managementBasePath + "/direct/accounts/detail"},
+			{Method: http.MethodPost, Path: managementBasePath + "/direct/accounts/scan"},
+			{Method: http.MethodPost, Path: managementBasePath + "/direct/accounts/scan/raw"},
+			{Method: http.MethodPost, Path: managementBasePath + "/direct/accounts/publish"},
 			{Method: http.MethodGet, Path: managementBasePath + "/settings"},
 			{Method: http.MethodPost, Path: managementBasePath + "/rescan"},
 		},
@@ -64,6 +69,8 @@ func handleManagement(raw []byte) ([]byte, error) {
 			return managementHTMLResponse(http.StatusOK, providerResourcePage(scanProviderDiagnostics())), nil
 		case request.Method == http.MethodGet && path == "/usage":
 			return managementHTMLResponse(http.StatusOK, publicStatusPageWithFilter(scanProviderDiagnostics(), query)), nil
+		case request.Method == http.MethodGet && path == "/direct":
+			return managementHTMLResponse(http.StatusOK, directAccountConsolePage(scanProviderDiagnostics(), query)), nil
 		case request.Method == http.MethodGet && path == "/data":
 			return managementJSONResponse(http.StatusOK, publicProviderDiagnostics(scanProviderDiagnostics())), nil
 		default:
@@ -88,8 +95,18 @@ func handleManagement(raw []byte) ([]byte, error) {
 		return handleProviderTest(request)
 	case request.Method == http.MethodPost && path == "/provider/fetch-models":
 		return handleProviderFetchModels(request)
+	case request.Method == http.MethodGet && path == "/direct":
+		return managementHTMLResponse(http.StatusOK, directAccountConsolePage(scanProviderDiagnostics(), query)), nil
 	case request.Method == http.MethodGet && path == "/direct/accounts":
 		return managementJSONResponse(http.StatusOK, directAccountsManagementState(currentPluginSettings())), nil
+	case request.Method == http.MethodGet && path == "/direct/accounts/detail":
+		return handleDirectAccountDetail(request)
+	case request.Method == http.MethodPost && path == "/direct/accounts/scan":
+		return handleDirectAccountScan(request)
+	case request.Method == http.MethodPost && path == "/direct/accounts/scan/raw":
+		return handleDirectScanBody(request)
+	case request.Method == http.MethodPost && path == "/direct/accounts/publish":
+		return handleDirectAccountPublish(request)
 	case request.Method == http.MethodGet && path == "/settings":
 		return managementJSONResponse(http.StatusOK, managementSettings()), nil
 	case request.Method == http.MethodPost && path == "/rescan":
