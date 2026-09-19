@@ -63,3 +63,16 @@ R7 will build the management UI over the proven direct-account contract:
 - account model scanning with aliases retained;
 - write-only treatment for API keys, static header values, and signing
   secrets.
+
+## R7: Direct Account Management UI
+
+Status: DISPATCHED
+
+Owner: Dev CPA Plugin - Vision
+
+Goal: embedded plugin UI with sidebar provider groups, account/model/header/
+routing views per provider, model scanning, and redacted JSON contract over
+the R6 direct-account foundation.
+
+Tracked handoff:
+`.docs/session_handoffs/r7/direct-account-ui.md`
