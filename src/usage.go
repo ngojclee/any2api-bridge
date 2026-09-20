@@ -875,14 +875,14 @@ func usageBucketLabelText(bucket string) string {
 }
 
 func renderUsageFilterForm(data usagePageData, action, prefix string) string {
-	return fmt.Sprintf(`<form class="usage-filters" method="get" action="%s">
-<label><span>Period</span><select id="%s-period" name="period">
+	return fmt.Sprintf(`<form class="usage-filters" data-usage-filter-form method="get" action="%s">
+<label class="usage-filter-field"><span>Period</span><select id="%s-period" name="period">
 <option value="last_5_hours"%s>Last 5 hours</option><option value="last_7_days"%s>Last 7 days</option><option value="last_30_days"%s>Last 30 days</option><option value="current_month"%s>Current month</option><option value="all_time"%s>All time</option>
 </select></label>
-<label><span>Bucket</span><select id="%s-bucket" name="bucket">
+<label class="usage-filter-field"><span>Bucket</span><select id="%s-bucket" name="bucket">
 <option value="minute"%s>By minute</option><option value="hour"%s>By hour</option><option value="day"%s>By day</option><option value="week"%s>By week</option><option value="month"%s>By month</option>
 </select></label>
-<label><span>Source</span><select id="%s-source" name="source">%s</select></label>
+<label class="usage-filter-field"><span>Source</span><select id="%s-source" name="source">%s</select></label>
 <button class="btn" type="submit">Apply</button>
 </form>`,
 		html.EscapeString(action),
@@ -1132,6 +1132,9 @@ a{color:inherit;text-decoration:none}
 .group{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
 .group strong{font-size:13px}
 .group span{color:var(--ink-2);font-size:12px}
+.drawer .field{display:flex;align-items:center;gap:6px;margin-bottom:8px}
+.drawer .field label{display:inline;margin:0;font-size:12px;color:var(--ink-2);font-weight:650}
+.drawer .field select{width:auto;min-width:140px;min-height:34px;border-radius:8px;padding:6px 9px}
 @media(max-width:960px){.shell{grid-template-columns:1fr}.drawer{border-left:0;border-top:1px solid var(--line);min-height:auto}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.content{padding:16px}.drawer-body{padding:14px}.usage-filters{grid-template-columns:1fr 1fr}.usage-filters .btn{width:100%%}}
 </style>
 </head>
