@@ -363,6 +363,23 @@ func (s providerSpec) modelInfosForRegistration(namespace string) []modelInfo {
 	return s.modelInfos(namespace)
 }
 
+// modelInfosForDisplay returns the IDs clients actually see after CPA applies
+// the plugin-owned auth record prefix. It is for diagnostics and UI only;
+// registration must keep bare IDs to avoid prefix duplication.
+func (s providerSpec) modelInfosForDisplay(namespace string) []modelInfo {
+	infos := s.modelInfos(namespace)
+	prefix := modelNamespace(namespace, s.Prefix)
+	if prefix == "" {
+		return infos
+	}
+	for index := range infos {
+		if infos[index].ID != "" {
+			infos[index].ID = prefix + "/" + infos[index].ID
+		}
+	}
+	return infos
+}
+
 // modelNamespace selects the prefix written to the plugin-owned auth record.
 // An explicit test namespace wins; otherwise the original provider prefix is
 // preserved.

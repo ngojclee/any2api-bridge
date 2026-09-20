@@ -185,6 +185,41 @@ func TestModelRegistrationReturnsBareIDsForCPA(t *testing.T) {
 	}
 }
 
+func TestModelInfosForDisplayUsesActualPublishedPrefix(t *testing.T) {
+	spec := providerSpec{
+		Name:   "Antigravity",
+		Prefix: "agy",
+		Models: []modelSpec{
+			{Name: "gemini-3.8-flash", Alias: "gemini-fast"},
+		},
+	}
+	infos := spec.modelInfosForDisplay("")
+	if len(infos) != 1 || infos[0].ID != "agy/gemini-fast" {
+		t.Fatalf("display infos = %+v", infos)
+	}
+	infos = spec.modelInfosForDisplay("spike.")
+	if len(infos) != 1 || infos[0].ID != "spike./gemini-fast" {
+		t.Fatalf("namespaced display infos = %+v", infos)
+	}
+}
+
+func TestDiagnosticsMirroredModelIDsUsePublishedPrefix(t *testing.T) {
+	loadMirror(t)
+	settings := currentPluginSettings()
+	settings.ExecutorEnabled = true
+	settings.ModelNamespace = "spike."
+	withSettings(t, settings)
+	diagnostics := scanProviderDiagnostics()
+	if len(diagnostics.MirroredModelIDs) == 0 {
+		t.Fatal("no mirrored model IDs")
+	}
+	for _, id := range diagnostics.MirroredModelIDs {
+		if !strings.HasPrefix(id, "spike./") {
+			t.Fatalf("dashboard model ID is not prefixed: %q", id)
+		}
+	}
+}
+
 func TestModelRegisterResponseUsesCPAGoStyleKeys(t *testing.T) {
 	loadMirror(t)
 	// Namespace the models so the collision guard allows serving.

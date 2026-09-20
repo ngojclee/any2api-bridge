@@ -519,7 +519,7 @@ func scanProviderDiagnostics() providerDiagnostics {
 		}
 		out.ReplacementMode = "direct"
 	} else if spec, mirrored := resolveProviderSpec(); mirrored {
-		modelInfos := spec.modelInfos(settings.ModelNamespace)
+		modelInfos := spec.modelInfosForDisplay(settings.ModelNamespace)
 		modelsServed := canServeModels(settings, spec)
 		out.MirroredProvider = spec.Name
 		out.MirroredBaseURL = redactURL(spec.BaseURL)
@@ -823,7 +823,7 @@ func modelIDsFromInfos(values []modelInfo) []string {
 }
 
 func publishedModelIDs(spec providerSpec, settings PluginSettings) []string {
-	infos := spec.modelInfosForRegistration(settings.ModelNamespace)
+	infos := spec.modelInfosForDisplay(settings.ModelNamespace)
 	if len(infos) == 0 || !canServeModels(settings, spec) {
 		return nil
 	}

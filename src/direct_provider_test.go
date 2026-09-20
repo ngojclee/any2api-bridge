@@ -242,6 +242,48 @@ openai-compatibility:
 	}
 }
 
+func TestDirectProviderUpsertSetsAndDeletesOriginalPrefix(t *testing.T) {
+	raw := []byte(`
+openai-compatibility:
+  - name: Antigravity
+    base-url: https://agy.example/v1
+`)
+	account := directAccount{
+		AccountID:    "agy-prod",
+		ProviderKind: directProviderAGY,
+		ChannelName:  "Antigravity",
+		Prefix:       "agy",
+		BaseURL:      "https://agy.example/v1",
+		Enabled:      true,
+	}
+	updated, changed, errPatch := patchDirectProviderConfig(raw, account)
+	if errPatch != nil {
+		t.Fatal(errPatch)
+	}
+	root, _ := parseYAMLMap(updated)
+	provider := openAICompatEntries(root)[0]
+	if prefix, _ := stringValue(provider, "prefix"); prefix != "agy" {
+		t.Fatalf("prefix was not set on prefix-less provider: %q", prefix)
+	}
+	if !containsString(changed, "prefix") {
+		t.Fatalf("prefix change was not reported: %#v", changed)
+	}
+
+	account.Prefix = ""
+	updated, changed, errPatch = patchDirectProviderConfig(updated, account)
+	if errPatch != nil {
+		t.Fatal(errPatch)
+	}
+	root, _ = parseYAMLMap(updated)
+	provider = openAICompatEntries(root)[0]
+	if _, found := mapValue(provider, "prefix"); found {
+		t.Fatalf("prefix was not deleted: %+v", provider)
+	}
+	if !containsString(changed, "prefix") {
+		t.Fatalf("prefix deletion was not reported: %#v", changed)
+	}
+}
+
 func containsString(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {
