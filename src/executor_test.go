@@ -594,8 +594,10 @@ func TestExecutorAuthSaveRequestEmbedsJSONObject(t *testing.T) {
 	if errUnmarshal := json.Unmarshal(decoded["json"], &auth); errUnmarshal != nil {
 		t.Fatalf("auth JSON was encoded as a string: %v", errUnmarshal)
 	}
-	if auth["type"] != defaultExecutorProvider {
-		t.Fatalf("auth type = %#v", auth["type"])
+	// CPA resolves mirrored models to the lowercased provider id, so the record
+	// must carry that exact spelling or its own models cannot find its auth.
+	if auth["type"] != strings.ToLower(defaultExecutorProvider) {
+		t.Fatalf("auth type = %#v, want %q", auth["type"], strings.ToLower(defaultExecutorProvider))
 	}
 	if _, hasLabel := auth["label"]; hasLabel {
 		t.Fatalf("auth label = %#v, want omitted for canonical provider identity", auth["label"])
@@ -619,11 +621,43 @@ func TestExecutorAuthJSONCanonicalizesDuplicateProviderKey(t *testing.T) {
 	if errUnmarshal := json.Unmarshal(raw, &auth); errUnmarshal != nil {
 		t.Fatal(errUnmarshal)
 	}
-	if auth["type"] != defaultExecutorProvider {
-		t.Fatalf("auth type = %#v, want %q", auth["type"], defaultExecutorProvider)
+	if auth["type"] != strings.ToLower(defaultExecutorProvider) {
+		t.Fatalf("auth type = %#v, want %q", auth["type"], strings.ToLower(defaultExecutorProvider))
 	}
 	if _, hasLabel := auth["label"]; hasLabel {
 		t.Fatalf("auth label = %#v, want omitted", auth["label"])
+	}
+}
+
+// A mixed-case auth type was written verbatim while CPA's model registry
+// resolved `any2api/*` to `ln.antigravity`. The record existed, reported
+// ensured, and every mirrored model it published still answered
+// auth_not_found, so the plugin advertised models it could not serve.
+func TestExecutorAuthTypeMatchesProviderIDCPAResolvesTo(t *testing.T) {
+	spec := providerSpec{
+		BaseURL: "http://127.0.0.1:8123/v1",
+		APIKeys: []string{"test-key"},
+		Prefix:  "agy",
+	}
+	for _, configured := range []string{"ln.Antigravity", "ln.antigravity", "LN.Antigravity", "ln.Antigravity-ln.Antigravity"} {
+		raw, errJSON := executorAuthJSON(spec, PluginSettings{ExecutorProvider: configured})
+		if errJSON != nil {
+			t.Fatalf("%s: %v", configured, errJSON)
+		}
+		var auth map[string]any
+		if errUnmarshal := json.Unmarshal(raw, &auth); errUnmarshal != nil {
+			t.Fatalf("%s: %v", configured, errUnmarshal)
+		}
+		providerType, _ := auth["type"].(string)
+		if providerType == "" {
+			t.Fatalf("%s: auth type is empty", configured)
+		}
+		if providerType != strings.ToLower(providerType) {
+			t.Fatalf("configured %q wrote type %q, which CPA cannot resolve for mirrored models", configured, providerType)
+		}
+		if strings.Contains(providerType, "-") && providerType != "ln.antigravity" {
+			t.Fatalf("configured %q collapsed to unexpected %q", configured, providerType)
+		}
 	}
 }
 

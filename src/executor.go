@@ -79,7 +79,14 @@ func executorAuthJSON(spec providerSpec, settings PluginSettings) ([]byte, error
 		provider = defaultExecutorProvider
 	}
 	authJSON, errMarshal := json.Marshal(map[string]any{
-		"type":     provider,
+		// CPA keys its model->provider registry and its auth index by the
+		// lowercased provider id, so a mixed-case type here publishes mirrored
+		// models that can never find their own auth record. Every other
+		// api-key auth on a live host uses a lowercase type; only this one was
+		// mixed-case, and it was the only one answering auth_not_found. The
+		// record name stays as configured so this writes over the existing
+		// record in place instead of leaving a second orphan behind.
+		"type":     strings.ToLower(provider),
 		"base_url": spec.upstreamBaseURL(),
 		"api_key":  spec.primaryAPIKey(),
 		// CPA sets auth.Label from metadata.email. Without a real email the

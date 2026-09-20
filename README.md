@@ -218,6 +218,14 @@ without becoming `agy/agy/<model>`. A family alias is routable only after it is
 present in the mirrored provider model list or the plugin's fetched model cache;
 agy2api advertising it alone cannot satisfy CPA's pre-executor model lookup.
 
+The plugin-owned auth record is written with a lowercased `type`. CPA resolves a
+namespaced model such as `any2api/gemini-3.8-flash` to the lowercased provider
+id, so a mixed-case `type` produces the worst possible shape: the plugin reports
+`executor_auth_ensured: true`, publishes its mirrored models, and every one of
+them then answers `auth_not_found`. The record file name keeps the configured
+spelling so upgrading overwrites the existing record in place rather than
+stranding a second orphan next to it.
+
 CPA normalizes a dynamic suffix such as `gemini-3.8-flash(high)` before provider
 lookup and carries the effort in request metadata. The plugin preserves that
 contract by forwarding the base model plus `reasoning_effort=high` to agy2api.
