@@ -196,6 +196,8 @@ func TestDirectConsolePageHasProviderGroupsViewsAndNoSecrets(t *testing.T) {
 		"ChatGPT / GPT2API",
 		"Antigravity accounts",
 		"ChatGPT accounts",
+		`data-provider-tab="agy2api"`,
+		`data-provider-tab="gpt2api"`,
 		"Accounts",
 		"Models",
 		"Headers",
@@ -217,6 +219,19 @@ func TestDirectConsolePageHasProviderGroupsViewsAndNoSecrets(t *testing.T) {
 	}
 	if strings.Contains(page, "secret-api-key") {
 		t.Fatal("direct console leaked API key")
+	}
+}
+
+func TestDirectModeResourcePageIsPrimaryConsole(t *testing.T) {
+	settings := defaultPluginSettings()
+	settings.DirectModeEnabled = true
+	withSettings(t, settings)
+	page := publicStatusPage(scanProviderDiagnostics())
+	if !strings.Contains(page, "Direct provider console") {
+		t.Fatalf("direct mode resource page is not the direct console: %s", page)
+	}
+	if strings.Contains(page, "Open editor") {
+		t.Fatal("direct mode resource page still exposes the legacy mirror editor")
 	}
 }
 

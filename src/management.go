@@ -228,6 +228,9 @@ func publicStatusPage(diagnostics providerDiagnostics) string {
 }
 
 func publicStatusPageWithFilter(diagnostics providerDiagnostics, query url.Values) string {
+	if currentPluginSettings().DirectModeEnabled {
+		return directAccountConsolePage(diagnostics, query)
+	}
 	public := publicProviderDiagnostics(diagnostics)
 	data := currentProviderEditorData(public, false)
 	data.Usage = usageDashboardData(public, normalizeUsageFilter(query))
@@ -235,18 +238,27 @@ func publicStatusPageWithFilter(diagnostics providerDiagnostics, query url.Value
 }
 
 func providerDetailPage(diagnostics providerDiagnostics) string {
+	if currentPluginSettings().DirectModeEnabled {
+		return directAccountConsolePage(diagnostics, url.Values{})
+	}
 	data := currentProviderEditorData(diagnostics, true)
 	data.Usage = usageDashboardData(diagnostics, normalizeUsageFilter(url.Values{}))
 	return providerEditorHTML(data)
 }
 
 func providerDetailPageWithFilter(diagnostics providerDiagnostics, query url.Values) string {
+	if currentPluginSettings().DirectModeEnabled {
+		return directAccountConsolePage(diagnostics, query)
+	}
 	data := currentProviderEditorData(diagnostics, true)
 	data.Usage = usageDashboardData(diagnostics, normalizeUsageFilter(query))
 	return providerEditorHTML(data)
 }
 
 func providerResourcePage(diagnostics providerDiagnostics) string {
+	if currentPluginSettings().DirectModeEnabled {
+		return directAccountConsolePage(diagnostics, url.Values{})
+	}
 	spec, found := resolveProviderSpec()
 	if !found {
 		return publicStatusPage(diagnostics)
