@@ -238,6 +238,22 @@ func TestDirectModeResourcePageIsPrimaryConsole(t *testing.T) {
 	}
 }
 
+func TestManagementRegistrationUsesDirectConsoleAsMenuEntry(t *testing.T) {
+	raw := string(handleManagementRegister())
+	directIndex := strings.Index(raw, `"Path":"/direct"`)
+	statusIndex := strings.Index(raw, `"Path":"/status"`)
+	menuIndex := strings.Index(raw, `"Menu":"Any2Api Bridge"`)
+	if directIndex < 0 || statusIndex < 0 {
+		t.Fatalf("resource routes missing: %s", raw)
+	}
+	if directIndex > statusIndex {
+		t.Fatalf("direct console is not the first resource entry: %s", raw)
+	}
+	if menuIndex < directIndex || menuIndex > statusIndex {
+		t.Fatalf("direct console menu entry is not registered correctly: %s", raw)
+	}
+}
+
 func TestDirectModeOffLeavesLegacyMirrorPathUntouched(t *testing.T) {
 	loadMirror(t)
 	settings := currentPluginSettings()

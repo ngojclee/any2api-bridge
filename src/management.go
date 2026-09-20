@@ -42,9 +42,13 @@ func handleManagementRegister() []byte {
 		},
 		Resources: []pluginapi.ResourceRoute{
 			{
-				Path:        "/status",
+				Path:        "/direct",
 				Menu:        pluginDisplayName,
-				Description: "Redacted provider matching diagnostics for Any2Api Bridge.",
+				Description: "Direct provider accounts console for Any2Api Bridge.",
+			},
+			{
+				Path:        "/status",
+				Description: "Legacy redacted provider matching diagnostics.",
 			},
 			{
 				Path:        "/data",
