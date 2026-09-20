@@ -64,6 +64,7 @@ func handleDirectAccountScan(request pluginapi.ManagementRequest) ([]byte, error
 		}), nil
 	}
 	merged := mergeDirectCatalogSpecs(models, account.Models, maxDirectModels)
+	merged = prefixDirectModelAliases(account.Prefix, merged)
 	return managementJSONResponse(http.StatusOK, directScanResult{
 		OK:          status >= 200 && status < 300,
 		AccountID:   account.AccountID,
@@ -101,7 +102,7 @@ func handleDirectAccountSyncProviderModels(request pluginapi.ManagementRequest) 
 			active = append(active, model)
 		}
 	}
-	account.Models = normalizeDirectAccountModels(active)
+	account.Models = prefixDirectModelAliases(account.Prefix, active)
 	merged, replaced := mergeDirectAccountByID(settings.DirectAccounts, account)
 	if errValidate := validateDirectAccounts(merged); errValidate != nil {
 		return managementJSONResponse(http.StatusConflict, map[string]string{"error": errValidate.Error()}), nil
@@ -274,6 +275,26 @@ func directModelStates(models []directAccountModel) []directAccountModelState {
 		})
 	}
 	return out
+}
+
+func prefixDirectModelAliases(prefix string, models []directAccountModel) []directAccountModel {
+	prefix = strings.Trim(strings.TrimSpace(prefix), "/")
+	if prefix == "" {
+		return normalizeDirectAccountModels(models)
+	}
+	out := make([]directAccountModel, 0, len(models))
+	prefix = strings.ToLower(prefix)
+	for _, model := range normalizeDirectAccountModels(models) {
+		base := strings.TrimSpace(model.Alias)
+		if base == "" {
+			base = strings.TrimSpace(model.UpstreamID)
+		}
+		if base != "" && !strings.HasPrefix(strings.ToLower(base), prefix+"/") {
+			model.Alias = prefix + "/" + base
+		}
+		out = append(out, model)
+	}
+	return normalizeDirectAccountModels(out)
 }
 
 func redactDirectChannelPayload(payload map[string]any) map[string]any {
