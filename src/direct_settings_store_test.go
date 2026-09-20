@@ -242,6 +242,35 @@ func TestMergeDirectAccountByIDPreservesStoredSecrets(t *testing.T) {
 	}
 }
 
+func TestMergeDirectAccountByIDRefreshesSuppliedCredential(t *testing.T) {
+	stored := []directAccount{{
+		AccountID:    "agy-prod",
+		ProviderKind: directProviderAGY,
+		ChannelName:  "AGY Direct",
+		Prefix:       "agy",
+		Enabled:      true,
+		APIKey:       "old-provider-key",
+	}}
+	imported := directAccount{
+		AccountID:    "agy-prod",
+		ProviderKind: directProviderAGY,
+		ChannelName:  "AGY Direct",
+		Prefix:       "agy",
+		Enabled:      true,
+		APIKey:       "new-provider-key",
+	}
+	merged, replaced := mergeDirectAccountByID(stored, normalizeDirectAccount(imported))
+	if !replaced {
+		t.Fatalf("expected replace")
+	}
+	if len(merged) != 1 {
+		t.Fatalf("expected 1 account, got %d", len(merged))
+	}
+	if merged[0].APIKey != "new-provider-key" {
+		t.Fatalf("server-side import did not refresh the stored api_key")
+	}
+}
+
 func TestDirectAccountFromRequestBodyDropsAPIKey(t *testing.T) {
 	account, errDecode := directAccountFromRequestBody([]byte(`{
 		"account_id":"agy-prod","provider_kind":"antigravity","channel_name":"AGY Direct",

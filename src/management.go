@@ -40,6 +40,8 @@ func handleManagementRegister() []byte {
 			{Method: http.MethodPost, Path: managementBasePath + "/direct/accounts/add"},
 			{Method: http.MethodPost, Path: managementBasePath + "/direct/accounts/remove"},
 			{Method: http.MethodPost, Path: managementBasePath + "/direct/mode"},
+			{Method: http.MethodGet, Path: managementBasePath + "/direct/providers/import"},
+			{Method: http.MethodPost, Path: managementBasePath + "/direct/providers/import"},
 			{Method: http.MethodGet, Path: managementBasePath + "/settings"},
 			{Method: http.MethodPost, Path: managementBasePath + "/rescan"},
 		},
@@ -132,6 +134,10 @@ func handleManagement(raw []byte) ([]byte, error) {
 		return handleDirectAccountRemove(request)
 	case request.Method == http.MethodPost && path == "/direct/mode":
 		return handleDirectModeSet(request)
+	case request.Method == http.MethodGet && path == "/direct/providers/import":
+		return handleDirectProviderImportList(request)
+	case request.Method == http.MethodPost && path == "/direct/providers/import":
+		return handleDirectProviderImport(request)
 	case request.Method == http.MethodGet && path == "/settings":
 		return managementJSONResponse(http.StatusOK, managementSettings()), nil
 	case request.Method == http.MethodPost && path == "/rescan":
