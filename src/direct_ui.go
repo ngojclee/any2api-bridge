@@ -78,6 +78,13 @@ func directConsoleHTML(data directConsoleData) string {
 .management-card{padding:12px 14px}
 .management-row{display:grid;grid-template-columns:auto minmax(260px,1fr) auto auto auto;align-items:center;gap:8px}
 .management-row input{width:100%%;min-height:36px;border:1px solid var(--line-2);border-radius:8px;padding:8px 10px}
+#provider-pane{padding:16px}
+#provider-pane .tabs{margin-bottom:16px}
+#provider-pane .tab{padding:8px 12px}
+#provider-content > .empty{margin:0 0 14px}
+#provider-content > .actions{margin:0 0 14px}
+#provider-content > .table-wrap{margin-top:0}
+#provider-content .table th,#provider-content .table td{padding:11px 12px}
 @media(max-width:1200px){.grid,.usage-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:900px){.provider-grid,.usage-analysis-grid{grid-template-columns:1fr}.management-row{grid-template-columns:1fr}.usage-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:600px){.grid,.usage-metrics,.provider-stats{grid-template-columns:1fr}}
