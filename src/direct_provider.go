@@ -184,6 +184,9 @@ func applyDirectAccountToProvider(provider map[string]any, account directAccount
 	} else {
 		setString(provider, "prefix", account.Prefix, changed)
 	}
+	if account.prioritySet {
+		setInt(provider, "priority", account.Priority, changed)
+	}
 	mergeDirectProviderAPIKeys(provider, account, changed)
 	mergeDirectProviderHeaders(provider, account, changed)
 	mergeDirectProviderModels(provider, account, changed)
@@ -191,10 +194,23 @@ func applyDirectAccountToProvider(provider map[string]any, account directAccount
 
 func mergeDirectProviderAPIKeys(provider map[string]any, account directAccount, changed *[]string) {
 	entries := make([]any, 0)
+	updatedExisting := false
 	if raw, ok := mapValue(provider, "api-key-entries", "api_key_entries"); ok {
 		for _, item := range asSlice(raw) {
 			if itemMap := asMap(item); itemMap != nil {
-				entries = append(entries, cloneAnyMap(itemMap))
+				clone := cloneAnyMap(itemMap)
+				if account.APIKey != "" {
+					if existingKey, _ := stringValue(clone, "api-key", "api_key", "key"); constantTimeEqual(existingKey, account.APIKey) {
+						if account.weightSet {
+							setInt(clone, "weight", account.Weight, nil)
+						}
+						if account.ProxyURL != "" {
+							setString(clone, "proxy-url", account.ProxyURL, nil)
+						}
+						updatedExisting = true
+					}
+				}
+				entries = append(entries, clone)
 			}
 		}
 	}
@@ -208,10 +224,17 @@ func mergeDirectProviderAPIKeys(provider map[string]any, account directAccount, 
 			}
 		}
 		if !duplicate {
-			entries = append(entries, map[string]any{"api-key": account.APIKey})
+			entry := map[string]any{"api-key": account.APIKey}
+			if account.weightSet {
+				entry["weight"] = account.Weight
+			}
+			if account.ProxyURL != "" {
+				entry["proxy-url"] = account.ProxyURL
+			}
+			entries = append(entries, entry)
 		}
 	}
-	if len(entries) > 0 {
+	if len(entries) > 0 && (!updatedExisting || account.weightSet || account.ProxyURL != "") {
 		setAny(provider, "api-key-entries", entries, changed)
 	}
 }

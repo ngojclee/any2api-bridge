@@ -27,12 +27,17 @@ openai-compatibility:
 		Prefix:                 "agy",
 		BaseURL:                "https://agy.example/v1",
 		Enabled:                true,
+		Priority:               20,
 		IdentitySigningEnabled: true,
 		APIKey:                 "new-key",
+		Weight:                 5,
+		ProxyURL:               "http://proxy.internal:8080",
 		StaticHeaders:          map[string]string{"X-New": "new-header"},
 		Models: []directAccountModel{
 			{UpstreamID: "gemini-3.8-flash", Alias: "gemini-fast", Enabled: true, Image: true},
 		},
+		weightSet:   true,
+		prioritySet: true,
 	}
 	updated, changed, errPatch := patchDirectProviderConfig(raw, account)
 	if errPatch != nil {
@@ -60,6 +65,17 @@ openai-compatibility:
 	headers := compatHeaders(provider)
 	if headers["X-Existing"] != "keep" || headers["X-New"] != "new-header" {
 		t.Fatalf("merged headers = %#v", headers)
+	}
+	if priority, _ := intValue(provider, "priority"); priority != 20 {
+		t.Fatalf("provider priority = %d, want 20", priority)
+	}
+	rawEntries, _ := mapValue(provider, "api-key-entries")
+	newEntry := asMap(asSlice(rawEntries)[1])
+	if weight, _ := intValue(newEntry, "weight"); weight != 5 {
+		t.Fatalf("new key weight = %d, want 5", weight)
+	}
+	if proxy, _ := stringValue(newEntry, "proxy-url"); proxy != "http://proxy.internal:8080" {
+		t.Fatalf("new key proxy-url = %q", proxy)
 	}
 	models := compatModels(provider)
 	if len(models) != 2 {
@@ -100,6 +116,9 @@ openai-compatibility:
 		BaseURL:      "https://gpt.example/v1",
 		Enabled:      true,
 		APIKey:       "existing-key",
+		Weight:       7,
+		ProxyURL:     "http://proxy.example:8080",
+		weightSet:    true,
 	}
 	updated, _, errPatch := patchDirectProviderConfig(raw, account)
 	if errPatch != nil {
@@ -110,6 +129,22 @@ openai-compatibility:
 	if len(keys) != 1 || keys[0] != "existing-key" {
 		t.Fatalf("duplicate key merge = %#v", keys)
 	}
+	entry := asMap(asSlice(mustMapValue(t, openAICompatEntries(root)[0], "api-key-entries"))[0])
+	if weight, _ := intValue(entry, "weight"); weight != 7 {
+		t.Fatalf("existing key weight = %d, want 7", weight)
+	}
+	if proxy, _ := stringValue(entry, "proxy-url"); proxy != "http://proxy.example:8080" {
+		t.Fatalf("existing key proxy-url = %q", proxy)
+	}
+}
+
+func mustMapValue(t *testing.T, raw map[string]any, key string) any {
+	t.Helper()
+	value, ok := mapValue(raw, key)
+	if !ok {
+		t.Fatalf("missing %s in %+v", key, raw)
+	}
+	return value
 }
 
 func TestDirectProviderPreviewRedactsSecretsAndUsesProviderPayload(t *testing.T) {
