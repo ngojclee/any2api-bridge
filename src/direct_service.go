@@ -25,12 +25,15 @@ type directScanResult struct {
 }
 
 type directPublishResult struct {
-	OK                       bool              `json:"ok"`
-	AccountID                string            `json:"account_id"`
-	ChannelPayload           map[string]any    `json:"channel_payload"`
-	ChannelPayloadConfigured map[string]any    `json:"channel_payload_configured"`
-	Validation               map[string]string `json:"validation,omitempty"`
-	PreviewOnly              bool              `json:"preview_only"`
+	OK                        bool              `json:"ok"`
+	AccountID                 string            `json:"account_id"`
+	ProviderName              string            `json:"provider_name"`
+	ProviderPrefix            string            `json:"provider_prefix"`
+	ProviderPayload           map[string]any    `json:"provider_payload"`
+	ProviderPayloadConfigured map[string]any    `json:"provider_payload_configured"`
+	Changed                   []string          `json:"changed"`
+	Validation                map[string]string `json:"validation,omitempty"`
+	PreviewOnly               bool              `json:"preview_only"`
 }
 
 func handleDirectAccountDetail(request pluginapi.ManagementRequest) ([]byte, error) {
@@ -60,7 +63,7 @@ func handleDirectAccountScan(request pluginapi.ManagementRequest) ([]byte, error
 			Error:       errProbe.Error(),
 		}), nil
 	}
-	merged := parseDirectModelCatalogFromSpecs(models, account.Models, maxDirectModels)
+	merged := mergeDirectCatalogSpecs(models, account.Models, maxDirectModels)
 	return managementJSONResponse(http.StatusOK, directScanResult{
 		OK:          status >= 200 && status < 300,
 		AccountID:   account.AccountID,
@@ -76,7 +79,7 @@ func handleDirectAccountPublish(request pluginapi.ManagementRequest) ([]byte, er
 	if !found {
 		return managementJSONResponse(http.StatusNotFound, map[string]string{"error": "direct account not found"}), nil
 	}
-	payload := directChannelPayload(account)
+	payload, changed, errPreview := directProviderPreview(currentConfigSnapshot().ConfigYAML, account)
 	validation := map[string]string{}
 	if account.APIKey == "" {
 		validation["api_key"] = "write-only credential is not configured in this draft"
@@ -84,13 +87,19 @@ func handleDirectAccountPublish(request pluginapi.ManagementRequest) ([]byte, er
 	if errValidate := validateDirectAccounts([]directAccount{account}); errValidate != nil {
 		validation["account"] = errValidate.Error()
 	}
+	if errPreview != nil {
+		validation["provider"] = errPreview.Error()
+	}
 	return managementJSONResponse(http.StatusOK, directPublishResult{
-		OK:                       len(validation) == 0,
-		AccountID:                account.AccountID,
-		ChannelPayload:           redactDirectChannelPayload(payload),
-		ChannelPayloadConfigured: directChannelConfiguredPayload(account),
-		Validation:               validation,
-		PreviewOnly:              true,
+		OK:                        len(validation) == 0,
+		AccountID:                 account.AccountID,
+		ProviderName:              account.ChannelName,
+		ProviderPrefix:            account.Prefix,
+		ProviderPayload:           redactDirectProviderPayload(payload),
+		ProviderPayloadConfigured: directChannelConfiguredPayload(account),
+		Changed:                   changed,
+		Validation:                validation,
+		PreviewOnly:               true,
 	}), nil
 }
 
@@ -147,22 +156,60 @@ func scanDirectAccountModels(settings PluginSettings, account directAccount) (in
 	return probeProviderModelSpecs(spec)
 }
 
-func parseDirectModelCatalogFromSpecs(models []modelSpec, existing []directAccountModel, limit int) []directAccountModel {
-	raw, _ := json.Marshal(map[string]any{
-		"data": modelSpecsToCatalogItems(models),
-	})
-	return parseDirectModelCatalog(raw, existing, limit)
-}
-
-func modelSpecsToCatalogItems(models []modelSpec) []map[string]any {
-	items := make([]map[string]any, 0, len(models))
-	for _, model := range models {
-		if strings.TrimSpace(model.Name) == "" {
+func mergeDirectCatalogSpecs(models []modelSpec, existing []directAccountModel, limit int) []directAccountModel {
+	if limit <= 0 || limit > maxDirectModels {
+		limit = maxDirectModels
+	}
+	existingByID := map[string]directAccountModel{}
+	for _, model := range normalizeDirectAccountModels(existing) {
+		existingByID[strings.ToLower(model.UpstreamID)] = model
+	}
+	out := make([]directAccountModel, 0, minInt(limit, len(models)+len(existingByID)))
+	seen := map[string]struct{}{}
+	for _, spec := range models {
+		id := strings.TrimSpace(spec.Name)
+		if id == "" {
 			continue
 		}
-		items = append(items, map[string]any{"id": model.Name})
+		key := strings.ToLower(id)
+		model, exists := existingByID[key]
+		if !exists {
+			model = directAccountModel{UpstreamID: id, Enabled: true}
+		}
+		model.UpstreamID = id
+		model.Unavailable = false
+		if spec.Image {
+			model.Image = true
+		}
+		if len(spec.InputModalities) > 0 {
+			model.InputModalities = append([]string(nil), spec.InputModalities...)
+		}
+		if len(spec.OutputModalities) > 0 {
+			model.OutputModalities = append([]string(nil), spec.OutputModalities...)
+		}
+		if spec.Thinking != nil {
+			model.Thinking = effectiveThinking(spec.Thinking)
+		}
+		out = append(out, normalizeDirectAccountModel(model))
+		seen[key] = struct{}{}
+		if len(out) >= limit {
+			break
+		}
 	}
-	return items
+	if len(out) < limit {
+		for _, model := range normalizeDirectAccountModels(existing) {
+			key := strings.ToLower(model.UpstreamID)
+			if _, exists := seen[key]; exists {
+				continue
+			}
+			model.Unavailable = true
+			out = append(out, model)
+			if len(out) >= limit {
+				break
+			}
+		}
+	}
+	return normalizeDirectAccountModels(out)
 }
 
 func directModelStates(models []directAccountModel) []directAccountModelState {
