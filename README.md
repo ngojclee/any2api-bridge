@@ -63,6 +63,67 @@ plugins:
       hmac_secret_source: env
 ```
 
+## Direct provider accounts
+
+Direct mode makes this plugin edit the *original* CPA `openai-compatibility`
+provider row instead of maintaining a plugin-owned mirror. Two keys drive it,
+both under `plugins.configs.any2api-bridge`:
+
+```yaml
+      direct_mode_enabled: true
+      direct_accounts:
+        - account_id: agy-prod          # required, unique, [A-Za-z0-9._-]
+          provider_kind: agy2api        # required: agy2api or gpt2api
+          channel_name: Antigravity     # the CPA provider row this account is
+          prefix: agy                   # set on that row; "" deletes it
+          base_url: http://10.21.4.101:8123/v1
+          label: Antigravity production
+          enabled: true
+          priority: 0
+          weight: 1
+          identity_signing_enabled: true
+          auth_id: ""                   # optional, resolves the active account
+          proxy_url: ""                 # optional
+          models:
+            - upstream_id: gemini-pro   # what the upstream actually serves
+              alias: agy-pro            # what CPA clients call it
+              enabled: true
+              image: true
+              input_modalities: [text, image]
+```
+
+`provider_channels` is not a key of this plugin; the list above is. Direct mode
+is off unless `direct_mode_enabled: true`, and while it is off the legacy
+mirror path stays in force, so installing a new version cannot change live
+routing on its own.
+
+### Saving accounts from the console
+
+The control page (`/direct`, the primary CPA menu entry) can now write this
+list for you. Each action is one row, never the whole file:
+
+| Console action | Route | Effect |
+| --- | --- | --- |
+| Save to CPA config | `POST /direct/accounts/add` | creates or replaces one account by `account_id` |
+| Remove | `POST /direct/accounts/remove` | deletes one account, leaves the provider row alone |
+| Turn direct mode on/off | `POST /direct/mode` | flips `direct_mode_enabled` |
+| Upsert provider | `POST /direct/accounts/upsert` | writes the original `openai-compatibility` row |
+
+Guarantees these writes make, each covered by a test:
+
+- A save can never introduce a credential. An `api_key` in the request body is
+  dropped, and replacing an account inherits the `api_key`, static `headers`
+  and `auth_id` already stored for it, so editing a draft cannot wipe an
+  operator's hand-written values. The key reaches CPA through Upsert, which
+  owns the provider row.
+- Everything outside `plugins.configs.any2api-bridge` is preserved: provider
+  rows, sibling plugin config, and unrelated keys such as `hmac_secret`.
+- An account list that fails validation is rejected with `409` and nothing is
+  written, including the case of turning direct mode on with zero accounts.
+
+Before this existed the console could only draft an account in the browser, so
+the account list came back empty after every reload and every CPA restart.
+
 ## How the plugin identifies a provider at request time
 
 CLIProxyAPI calls the after-auth interceptor with `pluginapi.RequestInterceptRequest`,

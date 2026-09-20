@@ -177,6 +177,145 @@ func writeCPAConfigFile(path string, updated []byte) error {
 	return nil
 }
 
+// storeDirectAccounts writes the plugin's account list back into
+// plugins.configs.<plugin>.direct_accounts so that accounts survive a CPA
+// restart. Before this, the console could only draft accounts in the browser,
+// so every reload and every restart emptied the page.
+//
+// The projection below is intentionally non-lossy: whatever an existing stored
+// account already carried (including an operator-written api_key) is written
+// back unchanged, so saving one account cannot quietly strip another's
+// credentials. The browser console never sends a key, so this path cannot add
+// a new secret to the config.
+// storeDirectSettings persists the plugin-owned direct knobs back into
+// plugins.configs.<plugin>. nil selects "leave this key alone".
+func storeDirectSettings(accounts *[]directAccount, directMode *bool) ([]string, error) {
+	snapshot := currentConfigSnapshot()
+	if !snapshot.ConfigPathFound || strings.TrimSpace(snapshot.ConfigPath) == "" {
+		return nil, fmt.Errorf("mounted CPA config path was not found")
+	}
+	updated, changed, errPatch := patchDirectSettingsConfig(snapshot.ConfigYAML, accounts, directMode)
+	if errPatch != nil {
+		return nil, errPatch
+	}
+	if errWrite := writeCPAConfigFile(snapshot.ConfigPath, updated); errWrite != nil {
+		return nil, errWrite
+	}
+	applyPluginConfiguration(loadPluginConfiguration(updated))
+	storeProviderSpec(providerSpec{}, false)
+	return changed, nil
+}
+
+func patchDirectSettingsConfig(raw []byte, accounts *[]directAccount, directMode *bool) ([]byte, []string, error) {
+	root, errParse := parseYAMLMap(raw)
+	if errParse != nil {
+		return nil, nil, fmt.Errorf("parse CPA config: %w", errParse)
+	}
+	if root == nil {
+		return nil, nil, fmt.Errorf("CPA config is empty")
+	}
+	changed := make([]string, 0, 2)
+	pluginConfig := ensurePluginConfig(root)
+	if accounts != nil {
+		normalized := normalizeDirectAccounts(*accounts)
+		if errValidate := validateDirectAccounts(normalized); errValidate != nil {
+			return nil, nil, errValidate
+		}
+		if len(normalized) == 0 {
+			deleteNormalized(pluginConfig, "direct_accounts", &changed)
+		} else {
+			setAny(pluginConfig, "direct_accounts", directAccountsForConfig(normalized), &changed)
+		}
+	}
+	if directMode != nil {
+		setBool(pluginConfig, "direct_mode_enabled", *directMode, &changed)
+	}
+	out, errMarshal := yaml.Marshal(root)
+	if errMarshal != nil {
+		return nil, nil, fmt.Errorf("marshal CPA config: %w", errMarshal)
+	}
+	return out, uniqueStrings(changed), nil
+}
+
+// directAccountsForConfig projects accounts onto the config shape. api_key and
+// header values are deliberately absent so a stored account never duplicates a
+// credential that the provider row already owns.
+func directAccountsForConfig(accounts []directAccount) []any {
+	out := make([]any, 0, len(accounts))
+	for _, account := range accounts {
+		entry := map[string]any{
+			"account_id":               account.AccountID,
+			"provider_kind":            account.ProviderKind,
+			"channel_name":             account.ChannelName,
+			"prefix":                   account.Prefix,
+			"enabled":                  account.Enabled,
+			"priority":                 account.Priority,
+			"identity_signing_enabled": account.IdentitySigningEnabled,
+			"weight":                   account.Weight,
+		}
+		if account.Label != "" {
+			entry["label"] = account.Label
+		}
+		if account.BaseURL != "" {
+			entry["base_url"] = account.BaseURL
+		}
+		if account.AuthID != "" {
+			entry["auth_id"] = account.AuthID
+		}
+		if account.APIKey != "" {
+			entry["api_key"] = account.APIKey
+		}
+		if account.ProxyURL != "" {
+			entry["proxy_url"] = account.ProxyURL
+		}
+		if len(account.StaticHeaders) > 0 {
+			// Round-trip the map the account already carried rather than a
+			// name-only projection: the parser only understands "headers", so
+			// anything else would silently drop the operator's config on save.
+			headers := make(map[string]any, len(account.StaticHeaders))
+			for key, value := range account.StaticHeaders {
+				headers[key] = value
+			}
+			entry["headers"] = headers
+		}
+		if len(account.Models) > 0 {
+			entry["models"] = directAccountModelsForConfig(account.Models)
+		}
+		out = append(out, entry)
+	}
+	return out
+}
+
+func directAccountModelsForConfig(models []directAccountModel) []any {
+	out := make([]any, 0, len(models))
+	for _, model := range models {
+		entry := map[string]any{
+			"upstream_id": model.UpstreamID,
+			"enabled":     model.Enabled,
+		}
+		if model.Alias != "" {
+			entry["alias"] = model.Alias
+		}
+		if model.Image {
+			entry["image"] = true
+		}
+		if len(model.InputModalities) > 0 {
+			entry["input_modalities"] = append([]string(nil), model.InputModalities...)
+		}
+		if len(model.OutputModalities) > 0 {
+			entry["output_modalities"] = append([]string(nil), model.OutputModalities...)
+		}
+		if model.Thinking != nil {
+			entry["thinking"] = model.Thinking
+		}
+		if model.Unavailable {
+			entry["unavailable"] = true
+		}
+		out = append(out, entry)
+	}
+	return out
+}
+
 func applyDirectAccountToProvider(provider map[string]any, account directAccount, changed *[]string) {
 	account = normalizeDirectAccount(account)
 	if account.Prefix == "" {
