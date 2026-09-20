@@ -50,6 +50,10 @@ func handleManagementRegister() []byte {
 				Description: "Direct provider accounts console for Any2Api Bridge.",
 			},
 			{
+				Path:        iconRoutePath,
+				Description: "Any2Api Bridge mark, served same-origin for the management panel.",
+			},
+			{
 				Path:        "/status",
 				Description: "Legacy redacted provider matching diagnostics.",
 			},
@@ -80,6 +84,8 @@ func handleManagement(raw []byte) ([]byte, error) {
 			return managementHTMLResponse(http.StatusOK, publicStatusPageWithFilter(scanProviderDiagnostics(), query)), nil
 		case request.Method == http.MethodGet && path == "/direct":
 			return managementHTMLResponse(http.StatusOK, directAccountConsolePage(scanProviderDiagnostics(), query)), nil
+		case request.Method == http.MethodGet && path == iconRoutePath:
+			return okEnvelope(iconResponse()), nil
 		case request.Method == http.MethodGet && path == "/data":
 			return managementJSONResponse(http.StatusOK, publicProviderDiagnostics(scanProviderDiagnostics())), nil
 		default:
