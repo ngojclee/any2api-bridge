@@ -198,6 +198,9 @@ func TestDirectConsolePageHasProviderGroupsViewsAndNoSecrets(t *testing.T) {
 		"ChatGPT accounts",
 		`data-provider-tab="agy2api"`,
 		`data-provider-tab="gpt2api"`,
+		"Overview",
+		"Service overview",
+		"Open editor",
 		"Accounts",
 		"Models",
 		"Headers",
@@ -230,7 +233,7 @@ func TestDirectModeResourcePageIsPrimaryConsole(t *testing.T) {
 	if !strings.Contains(page, "Direct provider console") {
 		t.Fatalf("direct mode resource page is not the direct console: %s", page)
 	}
-	if strings.Contains(page, "Open editor") {
+	if strings.Contains(page, "Mirrored provider editor") || strings.Contains(page, "Load secure config") {
 		t.Fatal("direct mode resource page still exposes the legacy mirror editor")
 	}
 }
