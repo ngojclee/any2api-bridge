@@ -179,3 +179,6 @@ R8 moves the direct path to the original `openai-compatibility` provider row:
 - When direct mode is enabled, the plugin resource page (`/status`) and provider
   routes render the direct console instead of the legacy mirrored-provider
   editor.
+- The direct console uses a full-width shell with a fixed-width workspace
+  sidebar, an Overview section, provider tabs, and a collapsed JSON result
+  panel.
