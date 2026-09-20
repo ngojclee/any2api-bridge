@@ -148,9 +148,9 @@ func directAccountFromRequestBody(raw []byte) (directAccount, error) {
 }
 
 // mergeDirectAccountByID replaces the account with the same account_id, or
-// appends a new one. On replace it inherits the stored credential and keeps the
-// stored static headers when the draft carried none, so saving an edited draft
-// cannot quietly delete values an operator put in the YAML by hand.
+// appends a new one. On replace it keeps the stored credential unless the
+// caller supplied a new one, and keeps stored static headers when the draft
+// carried none. Console drafts never carry credentials; provider imports do.
 func mergeDirectAccountByID(stored []directAccount, incoming directAccount) ([]directAccount, bool) {
 	out := make([]directAccount, 0, len(stored)+1)
 	replaced := false
@@ -160,7 +160,9 @@ func mergeDirectAccountByID(stored []directAccount, incoming directAccount) ([]d
 			continue
 		}
 		merged := incoming
-		merged.APIKey = account.APIKey
+		if strings.TrimSpace(merged.APIKey) == "" {
+			merged.APIKey = account.APIKey
+		}
 		// Keep the stored id spelling so a case-insensitive edit cannot quietly
 		// rename the account in config and orphan anything referencing it.
 		merged.AccountID = account.AccountID
