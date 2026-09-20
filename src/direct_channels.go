@@ -11,6 +11,17 @@ func resolveDirectAccountForPayload(payload InterceptRequestPayload, settings Pl
 		return directAccount{}, false
 	}
 	candidate := candidateFromPayload(payload, settings)
+	if candidate.AuthID != "" {
+		for _, account := range settings.DirectAccounts {
+			account = normalizeDirectAccount(account)
+			if !account.Enabled || account.AuthID == "" {
+				continue
+			}
+			if strings.EqualFold(account.AuthID, candidate.AuthID) {
+				return account, true
+			}
+		}
+	}
 	for _, account := range settings.DirectAccounts {
 		account = normalizeDirectAccount(account)
 		if !account.Enabled {
@@ -26,6 +37,9 @@ func resolveDirectAccountForPayload(payload InterceptRequestPayload, settings Pl
 }
 
 func directAccountMatchesCandidate(account directAccount, candidate providerCandidate) bool {
+	if account.AuthID != "" && candidate.AuthID != "" && strings.EqualFold(account.AuthID, candidate.AuthID) {
+		return true
+	}
 	for _, value := range []string{candidate.Name, candidate.ProviderKey, candidate.ResolvedPrefix} {
 		if strings.EqualFold(strings.TrimSpace(value), account.ChannelName) ||
 			strings.EqualFold(strings.TrimSpace(value), account.Prefix) ||
@@ -49,6 +63,7 @@ func directAccountProviderCandidate(account directAccount) providerCandidate {
 		URL:            account.BaseURL,
 		APIKey:         account.APIKey,
 		ResolvedPrefix: account.Prefix,
+		AuthID:         account.AuthID,
 	}
 }
 

@@ -24,6 +24,7 @@ type directAccount struct {
 	Enabled                bool                 `yaml:"enabled" json:"enabled"`
 	Priority               int                  `yaml:"priority" json:"priority"`
 	IdentitySigningEnabled bool                 `yaml:"identity_signing_enabled" json:"identity_signing_enabled"`
+	AuthID                 string               `yaml:"auth_id" json:"auth_id"`
 	APIKey                 string               `yaml:"api_key" json:"api_key"`
 	StaticHeaders          map[string]string    `yaml:"headers" json:"headers"`
 	Models                 []directAccountModel `yaml:"models" json:"models"`
@@ -50,6 +51,7 @@ type directAccountView struct {
 	Enabled                bool                      `json:"enabled"`
 	Priority               int                       `json:"priority"`
 	IdentitySigningEnabled bool                      `json:"identity_signing_enabled"`
+	AuthID                 string                    `json:"auth_id,omitempty"`
 	APIKeyConfigured       bool                      `json:"api_key_configured"`
 	Headers                []directHeaderState       `json:"headers,omitempty"`
 	Models                 []directAccountModelState `json:"models,omitempty"`
@@ -110,6 +112,7 @@ func directAccountFromMap(raw map[string]any) directAccount {
 	if signing, ok := boolValue(raw, "identity_signing_enabled", "identity-signing-enabled", "signing_enabled", "signing-enabled"); ok {
 		account.IdentitySigningEnabled = signing
 	}
+	account.AuthID, _ = stringValue(raw, "auth_id", "auth-id", "selected_auth_id", "selected-auth-id", "cpa_auth_id", "cpa-auth-id")
 	account.APIKey, _ = stringValue(raw, "api_key", "api-key")
 	account.StaticHeaders = directHeadersFromAny(raw["headers"])
 	if value, ok := mapValue(raw, "models"); ok {
@@ -141,6 +144,7 @@ func normalizeDirectAccount(account directAccount) directAccount {
 	account.Prefix = strings.Trim(strings.TrimSpace(account.Prefix), "/")
 	account.BaseURL = strings.TrimRight(strings.TrimSpace(account.BaseURL), "/")
 	account.APIKey = strings.TrimSpace(account.APIKey)
+	account.AuthID = strings.TrimSpace(account.AuthID)
 	if !account.IdentitySigningEnabled {
 		account.IdentitySigningEnabled = false
 	}
@@ -200,16 +204,17 @@ func validateDirectAccounts(accounts []directAccount) error {
 			continue
 		}
 		prefixKey := strings.ToLower(account.Prefix)
-		if prior := activePrefixes[prefixKey]; prior != "" {
-			return fmt.Errorf("direct account %q duplicates active prefix %q from %q", account.AccountID, account.Prefix, prior)
+		if priorChannel := activePrefixes[prefixKey]; priorChannel != "" && !strings.EqualFold(priorChannel, account.ChannelName) {
+			return fmt.Errorf("direct account %q duplicates active prefix %q from channel %q", account.AccountID, account.Prefix, priorChannel)
 		}
-		activePrefixes[prefixKey] = account.AccountID
+		activePrefixes[prefixKey] = account.ChannelName
 		channelKey := strings.ToLower(account.ChannelName)
 		if prior, exists := activeChannels[channelKey]; exists {
 			if prior.ProviderKind != account.ProviderKind {
 				return fmt.Errorf("direct account %q collides with %q on channel %q across provider kinds", account.AccountID, prior.AccountID, account.ChannelName)
 			}
-			return fmt.Errorf("direct account %q duplicates active channel %q from %q", account.AccountID, account.ChannelName, prior.AccountID)
+			// Multiple accounts may share one original provider; each account
+			// contributes a separate api-key entry.
 		}
 		activeChannels[channelKey] = account
 		channelModelIDs := map[string]string{}
@@ -226,10 +231,10 @@ func validateDirectAccounts(accounts []directAccount) error {
 				return fmt.Errorf("direct account %q has duplicate model id or alias %q from %q", account.AccountID, modelID, prior)
 			}
 			channelModelIDs[modelKey] = model.UpstreamID
-			if prior := activeAliases[modelKey]; prior != "" {
-				return fmt.Errorf("direct account %q has model alias %q already used by %q", account.AccountID, modelID, prior)
+			if priorChannel := activeAliases[modelKey]; priorChannel != "" && !strings.EqualFold(priorChannel, account.ChannelName) {
+				return fmt.Errorf("direct account %q has model alias %q already used by channel %q", account.AccountID, modelID, priorChannel)
 			}
-			activeAliases[modelKey] = account.AccountID
+			activeAliases[modelKey] = account.ChannelName
 		}
 	}
 	return nil
@@ -376,6 +381,7 @@ func directAccountReadView(account directAccount) directAccountView {
 		Enabled:                account.Enabled,
 		Priority:               account.Priority,
 		IdentitySigningEnabled: account.IdentitySigningEnabled,
+		AuthID:                 account.AuthID,
 		APIKeyConfigured:       account.APIKey != "",
 		Headers:                headers,
 		Models:                 models,

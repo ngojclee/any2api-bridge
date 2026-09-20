@@ -109,6 +109,15 @@ func TestDirectScanBodyParsesAndMergesModelMetadata(t *testing.T) {
 }
 
 func TestDirectPublishPreviewWritesSelectedModelsToChannelPayload(t *testing.T) {
+	previous := currentConfigSnapshot()
+	t.Cleanup(func() { applyPluginConfiguration(previous) })
+	t.Setenv("CPA_CONFIG_PATH", "Z:\\missing\\cpa-config.yaml")
+	applyPluginConfiguration(loadPluginConfiguration([]byte(`
+openai-compatibility:
+  - name: AGY Direct
+    prefix: agy
+    base-url: https://agy2api.example/v1
+`)))
 	settings := defaultPluginSettings()
 	settings.DirectModeEnabled = true
 	settings.DirectAccounts = []directAccount{{
@@ -154,17 +163,17 @@ func TestDirectPublishPreviewWritesSelectedModelsToChannelPayload(t *testing.T) 
 	if !body.OK || !body.PreviewOnly {
 		t.Fatalf("publish preview rejected: %+v", body)
 	}
-	models, ok := body.ChannelPayload["models"].([]any)
+	models, ok := body.ProviderPayload["models"].([]any)
 	if !ok || len(models) != 1 {
-		t.Fatalf("channel payload models = %#v", body.ChannelPayload["models"])
+		t.Fatalf("provider payload models = %#v", body.ProviderPayload["models"])
 	}
 	first := models[0].(map[string]any)
 	if first["name"] != "gemini-3.8-flash" || first["alias"] != "agy-fast" {
 		t.Fatalf("selected model/alias not preserved: %#v", first)
 	}
-	configured, ok := body.ChannelPayloadConfigured["headers"].(map[string]any)
-	if !ok || configured["X-Static"] != "configured" || body.ChannelPayloadConfigured["api_key_configured"] != true {
-		t.Fatalf("configured secret state missing: %+v", body.ChannelPayloadConfigured)
+	configured, ok := body.ProviderPayloadConfigured["headers"].(map[string]any)
+	if !ok || configured["X-Static"] != "configured" || body.ProviderPayloadConfigured["api_key_configured"] != true {
+		t.Fatalf("configured secret state missing: %+v", body.ProviderPayloadConfigured)
 	}
 	for _, secret := range []string{"provider-secret", "secret-header"} {
 		if strings.Contains(string(decoded.Result.Body), secret) {
@@ -193,8 +202,10 @@ func TestDirectConsolePageHasProviderGroupsViewsAndNoSecrets(t *testing.T) {
 		"Logs",
 		"Settings",
 		"/direct/accounts/scan",
+		"/direct/accounts/scan/upsert",
 		"/direct/accounts/publish",
-		"Direct account console",
+		"Upsert provider",
+		"Direct provider console",
 	} {
 		if !strings.Contains(page, expected) {
 			t.Fatalf("direct console missing %q", expected)

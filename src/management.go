@@ -34,7 +34,9 @@ func handleManagementRegister() []byte {
 			{Method: http.MethodGet, Path: managementBasePath + "/direct/accounts/detail"},
 			{Method: http.MethodPost, Path: managementBasePath + "/direct/accounts/scan"},
 			{Method: http.MethodPost, Path: managementBasePath + "/direct/accounts/scan/raw"},
+			{Method: http.MethodPost, Path: managementBasePath + "/direct/accounts/scan/upsert"},
 			{Method: http.MethodPost, Path: managementBasePath + "/direct/accounts/publish"},
+			{Method: http.MethodPost, Path: managementBasePath + "/direct/accounts/upsert"},
 			{Method: http.MethodGet, Path: managementBasePath + "/settings"},
 			{Method: http.MethodPost, Path: managementBasePath + "/rescan"},
 		},
@@ -105,8 +107,12 @@ func handleManagement(raw []byte) ([]byte, error) {
 		return handleDirectAccountScan(request)
 	case request.Method == http.MethodPost && path == "/direct/accounts/scan/raw":
 		return handleDirectScanBody(request)
+	case request.Method == http.MethodPost && path == "/direct/accounts/scan/upsert":
+		return handleDirectProviderScanUpsert(request)
 	case request.Method == http.MethodPost && path == "/direct/accounts/publish":
 		return handleDirectAccountPublish(request)
+	case request.Method == http.MethodPost && path == "/direct/accounts/upsert":
+		return handleDirectProviderUpsert(request)
 	case request.Method == http.MethodGet && path == "/settings":
 		return managementJSONResponse(http.StatusOK, managementSettings()), nil
 	case request.Method == http.MethodPost && path == "/rescan":

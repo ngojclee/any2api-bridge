@@ -156,3 +156,17 @@ and refactored to use the selected filter as the single source of truth.
 Rollback is a routing configuration action: re-enable the original legacy
 provider before disabling direct mode. Never delete a credential or account
 automatically during migration.
+
+## R8 Implementation Notes
+
+R8 moves the direct path to the original `openai-compatibility` provider row:
+
+- `/direct/accounts/upsert` merges the account credential, static headers, and
+  selected models into the matching original provider.
+- `/direct/accounts/scan/upsert` fetches the upstream `/v1/models` catalog,
+  merges it while preserving aliases/capabilities, and writes the resulting
+  model rows to the original provider.
+- Multiple accounts may share one provider; CPA selected-auth metadata can
+  resolve the account identity when available.
+- Direct mode does not use `model_namespace` or a plugin-owned virtual provider.
+- The legacy mirror remains available behind `direct_mode_enabled` for rollback.
