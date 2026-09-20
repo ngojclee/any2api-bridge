@@ -12,6 +12,7 @@ const (
 
 	maxDirectAccounts = 64
 	maxDirectModels   = 512
+	maxDirectWeight   = 1000000
 )
 
 type directAccount struct {
@@ -26,8 +27,12 @@ type directAccount struct {
 	IdentitySigningEnabled bool                 `yaml:"identity_signing_enabled" json:"identity_signing_enabled"`
 	AuthID                 string               `yaml:"auth_id" json:"auth_id"`
 	APIKey                 string               `yaml:"api_key" json:"api_key"`
+	Weight                 int                  `yaml:"weight" json:"weight"`
+	ProxyURL               string               `yaml:"proxy_url" json:"proxy_url"`
 	StaticHeaders          map[string]string    `yaml:"headers" json:"headers"`
 	Models                 []directAccountModel `yaml:"models" json:"models"`
+	weightSet              bool
+	prioritySet            bool
 }
 
 type directAccountModel struct {
@@ -53,6 +58,8 @@ type directAccountView struct {
 	IdentitySigningEnabled bool                      `json:"identity_signing_enabled"`
 	AuthID                 string                    `json:"auth_id,omitempty"`
 	APIKeyConfigured       bool                      `json:"api_key_configured"`
+	Weight                 int                       `json:"weight"`
+	ProxyURLConfigured     bool                      `json:"proxy_url_configured"`
 	Headers                []directHeaderState       `json:"headers,omitempty"`
 	Models                 []directAccountModelState `json:"models,omitempty"`
 }
@@ -105,7 +112,10 @@ func directAccountFromMap(raw map[string]any) directAccount {
 	account.ChannelName, _ = stringValue(raw, "channel_name", "channel-name", "channel", "name")
 	account.Prefix, _ = stringValue(raw, "prefix")
 	account.BaseURL, _ = stringValue(raw, "base_url", "base-url", "url")
-	account.Priority, _ = intValue(raw, "priority")
+	if priority, ok := intValue(raw, "priority"); ok {
+		account.Priority = priority
+		account.prioritySet = true
+	}
 	if enabled, ok := boolValue(raw, "enabled"); ok {
 		account.Enabled = enabled
 	}
@@ -114,6 +124,11 @@ func directAccountFromMap(raw map[string]any) directAccount {
 	}
 	account.AuthID, _ = stringValue(raw, "auth_id", "auth-id", "selected_auth_id", "selected-auth-id", "cpa_auth_id", "cpa-auth-id")
 	account.APIKey, _ = stringValue(raw, "api_key", "api-key")
+	if weight, ok := intValue(raw, "weight"); ok {
+		account.Weight = weight
+		account.weightSet = true
+	}
+	account.ProxyURL, _ = stringValue(raw, "proxy_url", "proxy-url")
 	account.StaticHeaders = directHeadersFromAny(raw["headers"])
 	if value, ok := mapValue(raw, "models"); ok {
 		account.Models = directAccountModelsFromAny(value)
@@ -145,6 +160,10 @@ func normalizeDirectAccount(account directAccount) directAccount {
 	account.BaseURL = strings.TrimRight(strings.TrimSpace(account.BaseURL), "/")
 	account.APIKey = strings.TrimSpace(account.APIKey)
 	account.AuthID = strings.TrimSpace(account.AuthID)
+	account.ProxyURL = strings.TrimSpace(account.ProxyURL)
+	if !account.weightSet && account.Weight == 0 {
+		account.Weight = 1
+	}
 	if !account.IdentitySigningEnabled {
 		account.IdentitySigningEnabled = false
 	}
@@ -199,6 +218,9 @@ func validateDirectAccounts(accounts []directAccount) error {
 		}
 		if !isSafeDirectPrefix(account.Prefix) {
 			return fmt.Errorf("direct account %q has unsafe prefix %q", account.AccountID, account.Prefix)
+		}
+		if account.Weight > maxDirectWeight {
+			return fmt.Errorf("direct account %q weight %d exceeds maximum %d", account.AccountID, account.Weight, maxDirectWeight)
 		}
 		if !account.Enabled {
 			continue
@@ -383,6 +405,8 @@ func directAccountReadView(account directAccount) directAccountView {
 		IdentitySigningEnabled: account.IdentitySigningEnabled,
 		AuthID:                 account.AuthID,
 		APIKeyConfigured:       account.APIKey != "",
+		Weight:                 account.Weight,
+		ProxyURLConfigured:     account.ProxyURL != "",
 		Headers:                headers,
 		Models:                 models,
 	}

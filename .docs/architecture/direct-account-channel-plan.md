@@ -163,6 +163,9 @@ R8 moves the direct path to the original `openai-compatibility` provider row:
 
 - `/direct/accounts/upsert` merges the account credential, static headers, and
   selected models into the matching original provider.
+- Account rows may carry CPA `weight` and optional `proxy-url` values; the
+  upsert path writes them into the matching `api-key-entries` entry, and
+  provider `priority` is written to the original provider row.
 - `/direct/accounts/scan/upsert` fetches the upstream `/v1/models` catalog,
   merges it while preserving aliases/capabilities, and writes the resulting
   model rows to the original provider.
@@ -170,3 +173,6 @@ R8 moves the direct path to the original `openai-compatibility` provider row:
   resolve the account identity when available.
 - Direct mode does not use `model_namespace` or a plugin-owned virtual provider.
 - The legacy mirror remains available behind `direct_mode_enabled` for rollback.
+- The console exposes exactly two account pages: `Antigravity accounts` and
+  `ChatGPT accounts`, with model/header/routing views scoped to each original
+  provider.

@@ -157,3 +157,22 @@ func TestDirectManagementStateIsRedacted(t *testing.T) {
 		}
 	}
 }
+
+func TestDirectAccountWeightBounds(t *testing.T) {
+	account := directAccount{
+		AccountID:    "agy-prod",
+		ProviderKind: directProviderAGY,
+		ChannelName:  "Antigravity",
+		Prefix:       "agy",
+		Enabled:      true,
+		Weight:       maxDirectWeight + 1,
+		weightSet:    true,
+	}
+	if err := validateDirectAccounts([]directAccount{account}); err == nil || !strings.Contains(err.Error(), "weight") {
+		t.Fatalf("weight validation error = %v", err)
+	}
+	account.Weight = 0
+	if err := validateDirectAccounts([]directAccount{account}); err != nil {
+		t.Fatalf("non-positive weight should be allowed for exclusion semantics: %v", err)
+	}
+}
