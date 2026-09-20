@@ -2,10 +2,13 @@ package main
 
 import (
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/router-for-me/CLIProxyAPI/v7/sdk/pluginapi"
 )
 
 func TestDirectProviderImportListsAndImportsConfiguredProviders(t *testing.T) {
@@ -46,6 +49,21 @@ plugins:
 	}
 	if strings.Contains(list.Raw, "secret-agy-key") || strings.Contains(list.Raw, "secret-gpt-key") {
 		t.Fatal("provider import list leaked an API key")
+	}
+
+	filteredRaw, errFiltered := handleDirectProviderImportList(pluginapi.ManagementRequest{
+		Path:  "/direct/providers/import",
+		Query: url.Values{"kind": {"gpt2api"}},
+	})
+	filtered := decodeManagementReply(t, filteredRaw, errFiltered)
+	filtered.statusIs(t, http.StatusOK)
+	filteredProviders, ok := filtered.Body["providers"].([]any)
+	if !ok || len(filteredProviders) != 1 {
+		t.Fatalf("filtered providers = %#v", filtered.Body["providers"])
+	}
+	filteredProvider, ok := filteredProviders[0].(map[string]any)
+	if !ok || filteredProvider["kind"] != directProviderGPT || filteredProvider["name"] != "ChatGPT" {
+		t.Fatalf("filtered provider = %#v", filteredProviders[0])
 	}
 
 	importRaw, errImport := handleDirectProviderImport(pluginapiRequest(t, http.MethodPost, "/direct/providers/import", map[string]any{
