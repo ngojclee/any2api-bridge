@@ -64,6 +64,12 @@ func directConsoleHTML(data directConsoleData) string {
 .usage-metric strong{display:block;margin-top:3px;font-size:15px;word-break:break-word}
 .usage-analysis-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:14px}
 .usage-panel{margin:0}
+.usage-filters{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:12px 0}
+.usage-filter-field{display:inline-flex;align-items:center;gap:6px;margin:0;font-size:12px;color:var(--ink-2);font-weight:650}
+.usage-filter-field span{display:inline;margin:0;font-size:12px;color:var(--ink-2);font-weight:650;text-transform:none;letter-spacing:0}
+.usage-filters select{width:auto;min-width:140px;min-height:34px;border:1px solid var(--line-2);background:#fff;border-radius:8px;padding:6px 9px;color:var(--ink);cursor:pointer}
+.usage-filters .btn{height:34px;min-height:34px;padding:0 12px;font-size:13px}
+.usage-filters.is-loading{opacity:.6;pointer-events:none}
 .share-list,.recent-list,.bucket-list{display:grid;gap:8px}
 .share-row{padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--inset)}
 .share-row-head,.share-meta{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
@@ -87,7 +93,7 @@ func directConsoleHTML(data directConsoleData) string {
 #provider-content .table th,#provider-content .table td{padding:11px 12px}
 @media(max-width:1200px){.grid,.usage-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:900px){.provider-grid,.usage-analysis-grid{grid-template-columns:1fr}.management-row{grid-template-columns:1fr}.usage-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:600px){.grid,.usage-metrics,.provider-stats{grid-template-columns:1fr}}
+@media(max-width:600px){.grid,.usage-metrics,.provider-stats{grid-template-columns:1fr}.usage-filter-field{width:100%%}.usage-filter-field select{width:100%%}}
 </style>
 </head>
 <body style="margin:0;width:100%%;max-width:none">
@@ -132,8 +138,9 @@ func directConsoleHTML(data directConsoleData) string {
 <script>
 const state = %s;
 const MGT = '/v0/management/plugins/%s';
-let provider = 'agy2api';
-let view = 'accounts';
+const initialUsageFilter = new URLSearchParams(window.location.search);
+let provider = (initialUsageFilter.has('period') || initialUsageFilter.has('bucket') || initialUsageFilter.has('source')) ? 'global' : 'agy2api';
+let view = provider === 'global' ? 'usage' : 'accounts';
 let selectedAccount = '';
 const accounts = state.direct.accounts || [];
 function esc(value){ return String(value === undefined || value === null ? '' : value).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -170,7 +177,11 @@ document.querySelectorAll('[data-provider-tab]').forEach(node=>{ node.onclick = 
 document.addEventListener('click', (ev)=>{ const node = ev.target && ev.target.closest ? ev.target.closest('[data-open-provider]') : null; if(!node){ return; } ev.preventDefault(); setProvider(node.dataset.openProvider); });
 el('open-editor').onclick = ()=>{ if(provider === 'global'){ provider = 'agy2api'; } view = 'accounts'; render(); const account = firstAccount(provider); if(account){ selectedAccount = account; render(); notice('Editing CPA provider row for ' + account + '. Upsert writes the matching CPA provider row.', 'ok'); } else { notice('No account is configured for ' + provider + '. Add an account draft first.', 'warn'); } };
 document.querySelectorAll('.tab').forEach(node=>{ node.onclick = ()=>setView(node.dataset.view); });
+let usageRequestID = 0;
+function bindUsageFilters(){ const pane = el('usage-pane'); const form = pane ? pane.querySelector('.usage-filters') : null; if(!form || form.dataset.bound === 'true'){ return; } form.dataset.bound = 'true'; form.addEventListener('submit', ev=>{ ev.preventDefault(); refreshUsageFilters(form); }); form.querySelectorAll('select').forEach(select=>select.addEventListener('change', ()=>refreshUsageFilters(form))); }
+async function refreshUsageFilters(form){ const requestID = ++usageRequestID; const url = new URL(window.location.href); url.search = new URLSearchParams(new FormData(form)).toString(); form.classList.add('is-loading'); try{ const res = await fetch(url.toString(), {headers:{'X-Requested-With':'fetch'}}); if(!res.ok){ throw new Error('HTTP ' + res.status); } const html = await res.text(); if(requestID !== usageRequestID){ return; } const doc = new DOMParser().parseFromString(html, 'text/html'); const nextPane = doc.getElementById('usage-pane'); const pane = el('usage-pane'); if(!nextPane || !pane){ throw new Error('usage pane missing'); } pane.innerHTML = nextPane.innerHTML; history.replaceState(null, '', url.toString()); bindUsageFilters(); notice('Usage filter applied.', 'ok'); }catch(err){ notice('Usage filter failed: ' + err.message, 'err'); }finally{ form.classList.remove('is-loading'); } }
 render();
+bindUsageFilters();
 // Persistent writes are delegated from document so they bind correctly even
 // though the account table re-renders on every tab switch.
 document.addEventListener('click', async (ev)=>{
