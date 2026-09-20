@@ -35,6 +35,7 @@ func handleManagementRegister() []byte {
 			{Method: http.MethodPost, Path: managementBasePath + "/direct/accounts/scan"},
 			{Method: http.MethodPost, Path: managementBasePath + "/direct/accounts/scan/raw"},
 			{Method: http.MethodPost, Path: managementBasePath + "/direct/accounts/scan/upsert"},
+			{Method: http.MethodPost, Path: managementBasePath + "/direct/accounts/sync-provider-models"},
 			{Method: http.MethodPost, Path: managementBasePath + "/direct/accounts/publish"},
 			{Method: http.MethodPost, Path: managementBasePath + "/direct/accounts/upsert"},
 			{Method: http.MethodPost, Path: managementBasePath + "/direct/accounts/add"},
@@ -124,6 +125,8 @@ func handleManagement(raw []byte) ([]byte, error) {
 		return handleDirectScanBody(request)
 	case request.Method == http.MethodPost && path == "/direct/accounts/scan/upsert":
 		return handleDirectProviderScanUpsert(request)
+	case request.Method == http.MethodPost && path == "/direct/accounts/sync-provider-models":
+		return handleDirectAccountSyncProviderModels(request)
 	case request.Method == http.MethodPost && path == "/direct/accounts/publish":
 		return handleDirectAccountPublish(request)
 	case request.Method == http.MethodPost && path == "/direct/accounts/upsert":

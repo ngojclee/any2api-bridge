@@ -2,7 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -217,6 +220,10 @@ func TestDirectConsolePageHasProviderGroupsViewsAndNoSecrets(t *testing.T) {
 		"/direct/accounts/scan/upsert",
 		"/direct/accounts/publish",
 		"Upsert provider",
+		"Sync from provider",
+		"sync-provider-models",
+		"status-on",
+		"row-actions",
 		"Direct provider console",
 	} {
 		if !strings.Contains(page, expected) {
@@ -234,6 +241,58 @@ func TestDirectConsolePageHasProviderGroupsViewsAndNoSecrets(t *testing.T) {
 	}
 	if strings.Contains(page, "secret-api-key") {
 		t.Fatal("direct console leaked API key")
+	}
+}
+
+func TestDirectAccountSyncProviderModelsCopiesProviderCatalog(t *testing.T) {
+	previous := currentConfigSnapshot()
+	t.Cleanup(func() { applyPluginConfiguration(previous) })
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	initial := []byte(`
+openai-compatibility:
+  - name: ChatGPT
+    prefix: gpt
+    base-url: http://10.21.4.101:8792/v1
+    models:
+      - name: chatgpt-web/gpt-5.6-sol-instant
+      - name: chatgpt-web/gpt-5.6-sol-medium
+plugins:
+  configs:
+    ` + pluginID + `:
+      enabled: true
+`)
+	if errWrite := os.WriteFile(path, initial, 0o600); errWrite != nil {
+		t.Fatal(errWrite)
+	}
+	t.Setenv("CPA_CONFIG_PATH", path)
+	applyPluginConfiguration(loadPluginConfiguration(initial))
+	settings := defaultPluginSettings()
+	settings.DirectAccounts = []directAccount{{
+		AccountID:    "chatgpt",
+		ProviderKind: directProviderGPT,
+		ChannelName:  "ChatGPT",
+		Prefix:       "gpt",
+		BaseURL:      "http://10.21.4.101:8792/v1",
+		Enabled:      true,
+		APIKey:       "secret-key",
+		Models: []directAccountModel{{
+			UpstreamID: "chatgpt-web/high",
+			Enabled:    true,
+		}},
+	}}
+	withSettings(t, settings)
+
+	raw, errHandle := handleDirectAccountSyncProviderModels(pluginapiRequest(t, http.MethodPost, "/direct/accounts/sync-provider-models", map[string]any{
+		"account_id": "chatgpt",
+	}))
+	reply := decodeManagementReply(t, raw, errHandle)
+	reply.statusIs(t, http.StatusOK)
+	if got := reply.Body["model_count"]; got != float64(2) {
+		t.Fatalf("model_count = %#v", got)
+	}
+	models := currentPluginSettings().DirectAccounts[0].Models
+	if len(models) != 2 || models[0].UpstreamID != "chatgpt-web/gpt-5.6-sol-instant" || models[1].UpstreamID != "chatgpt-web/gpt-5.6-sol-medium" {
+		t.Fatalf("synced models = %+v", models)
 	}
 }
 
