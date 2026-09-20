@@ -176,3 +176,6 @@ R8 moves the direct path to the original `openai-compatibility` provider row:
 - The console exposes exactly two account pages: `Antigravity accounts` and
   `ChatGPT accounts`, with model/header/routing views scoped to each original
   provider.
+- When direct mode is enabled, the plugin resource page (`/status`) and provider
+  routes render the direct console instead of the legacy mirrored-provider
+  editor.
