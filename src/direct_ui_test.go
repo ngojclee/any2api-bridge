@@ -192,10 +192,10 @@ func TestDirectConsolePageHasProviderGroupsViewsAndNoSecrets(t *testing.T) {
 	withSettings(t, settings)
 	page := directAccountConsolePage(scanProviderDiagnostics(), url.Values{})
 	for _, expected := range []string{
-		"Antigravity / AGY2API",
-		"ChatGPT / GPT2API",
-		"Antigravity accounts",
-		"ChatGPT accounts",
+		"Antigravity",
+		"ChatGPT",
+		"Management access",
+		"CPA management key",
 		`data-provider-tab="agy2api"`,
 		`data-provider-tab="gpt2api"`,
 		"Overview",
@@ -218,6 +218,15 @@ func TestDirectConsolePageHasProviderGroupsViewsAndNoSecrets(t *testing.T) {
 	} {
 		if !strings.Contains(page, expected) {
 			t.Fatalf("direct console missing %q", expected)
+		}
+	}
+	for _, removed := range []string{
+		"Antigravity / AGY2API original provider",
+		"ChatGPT / GPT2API original provider",
+		`class="nav-sub"`,
+	} {
+		if strings.Contains(page, removed) {
+			t.Fatalf("direct console still contains removed navigation %q", removed)
 		}
 	}
 	if strings.Contains(page, "secret-api-key") {
