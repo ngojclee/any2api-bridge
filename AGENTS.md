@@ -34,6 +34,16 @@
    version=<ver>` and `configured`.
 6. Restart keeps updates because `plugins/` and `config.yaml` are bind mounts.
 
+## Live load vs restart (CPA v7.3.7)
+
+- CPA v7.3.7 has plugin hot reload (`pluginhost: plugin hot reloaded ...`).
+- Hot reload only runs when `ApplyConfig` fires: process startup, an accepted
+  config reload, or a config save through the CPA management API. Dropping a new
+  `.so` and editing `config.yaml` directly on disk does not reliably trigger it.
+- To load a new `.so` without a restart, apply the plugin config through the
+  management API; otherwise use one container restart.
+- Keep `store.version` matched to the file on disk, or CPA skips the plugin.
+
 ## Verification
 
 ```bash
