@@ -74,6 +74,53 @@ func handleDirectAccountScan(request pluginapi.ManagementRequest) ([]byte, error
 	}), nil
 }
 
+func handleDirectAccountSyncProviderModels(request pluginapi.ManagementRequest) ([]byte, error) {
+	settings := currentPluginSettings()
+	account, found := directAccountFromRequestID(settings, request)
+	if !found {
+		return managementJSONResponse(http.StatusNotFound, map[string]string{"error": "direct account not found"}), nil
+	}
+	root, errParse := parseYAMLMap(currentConfigSnapshot().ConfigYAML)
+	if errParse != nil {
+		return managementJSONResponse(http.StatusBadGateway, map[string]string{"error": "CPA config could not be parsed"}), nil
+	}
+	entries := openAICompatEntries(root)
+	providerIndex := findDirectProviderIndex(entries, account)
+	if providerIndex < 0 {
+		return managementJSONResponse(http.StatusConflict, map[string]string{"error": "matching CPA provider was not found"}), nil
+	}
+	provider := entries[providerIndex]
+	providerModels := compatModels(provider)
+	if len(providerModels) == 0 {
+		return managementJSONResponse(http.StatusConflict, map[string]string{"error": "provider has no configured models"}), nil
+	}
+	synced := mergeDirectCatalogSpecs(providerModels, account.Models, maxDirectModels)
+	active := make([]directAccountModel, 0, len(synced))
+	for _, model := range synced {
+		if !model.Unavailable {
+			active = append(active, model)
+		}
+	}
+	account.Models = normalizeDirectAccountModels(active)
+	merged, replaced := mergeDirectAccountByID(settings.DirectAccounts, account)
+	if errValidate := validateDirectAccounts(merged); errValidate != nil {
+		return managementJSONResponse(http.StatusConflict, map[string]string{"error": errValidate.Error()}), nil
+	}
+	if _, errStore := storeDirectSettings(&merged, nil); errStore != nil {
+		return managementJSONResponse(http.StatusInternalServerError, map[string]string{"error": errStore.Error()}), nil
+	}
+	providerName, _ := stringValue(provider, "name")
+	recordDashboardEvent("success", "Direct account models synced from provider")
+	return managementJSONResponse(http.StatusOK, map[string]any{
+		"ok":            true,
+		"account_id":    account.AccountID,
+		"provider_name": providerName,
+		"model_count":   len(account.Models),
+		"models":        directModelStates(account.Models),
+		"replaced":      replaced,
+	}), nil
+}
+
 func handleDirectAccountPublish(request pluginapi.ManagementRequest) ([]byte, error) {
 	account, found := directAccountFromRequestID(currentPluginSettings(), request)
 	if !found {
