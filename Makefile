@@ -1,4 +1,4 @@
-VERSION ?= 0.4.8
+VERSION ?= 0.4.9
 GO ?= go
 PLUGIN_ID = any2api-bridge
 OUT = dist/any2api-bridge-v$(VERSION).so

@@ -20,7 +20,7 @@ type directProviderImportView struct {
 	Disabled      bool   `json:"disabled"`
 }
 
-func handleDirectProviderImportList(_ pluginapi.ManagementRequest) ([]byte, error) {
+func handleDirectProviderImportList(request pluginapi.ManagementRequest) ([]byte, error) {
 	root, errParse := parseYAMLMap(currentConfigSnapshot().ConfigYAML)
 	if errParse != nil {
 		return managementJSONResponse(http.StatusBadGateway, map[string]string{
@@ -33,12 +33,16 @@ func handleDirectProviderImportList(_ pluginapi.ManagementRequest) ([]byte, erro
 		imported[strings.ToLower(strings.TrimSpace(account.ChannelName))] = struct{}{}
 	}
 	items := make([]directProviderImportView, 0)
+	requestedKind := normalizeDirectProviderKind(firstRequestQueryValue(request, "kind"))
 	for index, providerMap := range openAICompatEntries(root) {
 		name, _ := stringValue(providerMap, "name")
 		baseURL, _ := stringValue(providerMap, "base-url", "base_url", "url")
 		prefix, _ := stringValue(providerMap, "prefix")
 		kind := classifyDirectProviderKind(name, baseURL, prefix)
 		if kind == "" {
+			continue
+		}
+		if requestedKind != "" && kind != requestedKind {
 			continue
 		}
 		disabled, _ := boolValue(providerMap, "disabled")
