@@ -161,6 +161,7 @@ func directAccountFromProvider(providerMap map[string]any, kind string) directAc
 			Thinking:         model.Thinking,
 		})
 	}
+	models = prefixDirectModelAliases(prefix, models)
 	return normalizeDirectAccount(directAccount{
 		AccountID:              accountID,
 		ProviderKind:           kind,

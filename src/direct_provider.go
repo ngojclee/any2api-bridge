@@ -86,6 +86,7 @@ func handleDirectProviderScanUpsert(request pluginapi.ManagementRequest) ([]byte
 		}), nil
 	}
 	account.Models = mergeDirectCatalogSpecs(scanned, account.Models, maxDirectModels)
+	account.Models = prefixDirectModelAliases(account.Prefix, account.Models)
 	snapshot := currentConfigSnapshot()
 	if !snapshot.ConfigPathFound || strings.TrimSpace(snapshot.ConfigPath) == "" {
 		return managementJSONResponse(http.StatusConflict, map[string]string{"error": "mounted CPA config path was not found"}), nil
