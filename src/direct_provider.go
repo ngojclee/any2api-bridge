@@ -179,6 +179,11 @@ func writeCPAConfigFile(path string, updated []byte) error {
 
 func applyDirectAccountToProvider(provider map[string]any, account directAccount, changed *[]string) {
 	account = normalizeDirectAccount(account)
+	if account.Prefix == "" {
+		deleteNormalized(provider, "prefix", changed)
+	} else {
+		setString(provider, "prefix", account.Prefix, changed)
+	}
 	mergeDirectProviderAPIKeys(provider, account, changed)
 	mergeDirectProviderHeaders(provider, account, changed)
 	mergeDirectProviderModels(provider, account, changed)
@@ -306,11 +311,16 @@ func findDirectProviderIndex(entries []map[string]any, account directAccount) in
 		if account.ChannelName != "" && !strings.EqualFold(strings.TrimSpace(name), account.ChannelName) {
 			continue
 		}
-		if account.Prefix != "" && !strings.EqualFold(strings.Trim(strings.TrimSpace(prefix), "/"), account.Prefix) {
-			continue
-		}
 		if account.BaseURL != "" && strings.TrimRight(strings.TrimSpace(baseURL), "/") != account.BaseURL {
 			continue
+		}
+		// Prefix is mutable account metadata, not an identity key. Only use it
+		// as a fallback when the account did not identify the provider by name
+		// or base URL. This lets a prefix-less provider be upgraded in place.
+		if account.ChannelName == "" && account.BaseURL == "" && account.Prefix != "" {
+			if !strings.EqualFold(strings.Trim(strings.TrimSpace(prefix), "/"), account.Prefix) {
+				continue
+			}
 		}
 		return index
 	}
