@@ -240,6 +240,7 @@ func pluginRegistration() registration {
 			Version:          pluginVersion,
 			Author:           "ngojclee",
 			GitHubRepository: pluginRepositoryURL,
+			Logo:             "/v0/resource/plugins/" + pluginID + iconRoutePath,
 			ConfigFields: []pluginapi.ConfigField{
 				{
 					Name:        "auto_discover",
