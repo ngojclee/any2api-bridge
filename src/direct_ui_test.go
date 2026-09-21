@@ -225,6 +225,11 @@ func TestDirectConsolePageHasProviderGroupsViewsAndNoSecrets(t *testing.T) {
 		"status-on",
 		"row-actions",
 		"Direct provider console",
+		// The console refreshes by reloading, so the selected provider/view
+		// must be persisted or every action snapped back to Antigravity.
+		"any2apiBridgeUiState",
+		"writeUiState",
+		"lastProvider",
 	} {
 		if !strings.Contains(page, expected) {
 			t.Fatalf("direct console missing %q", expected)
