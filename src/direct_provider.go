@@ -101,7 +101,7 @@ func handleDirectProviderScanUpsert(request pluginapi.ManagementRequest) ([]byte
 		}), nil
 	}
 	account.Models = mergeDirectCatalogSpecs(scanned, account.Models, maxDirectModels)
-	account.Models = prefixDirectModelAliases(account.Prefix, account.Models)
+	account.Models = effectiveDirectModelAliases(account, account.Models)
 	merged, _ := mergeDirectAccountByID(settings.DirectAccounts, account)
 	if errValidate := validateDirectAccounts(merged); errValidate != nil {
 		return managementJSONResponse(http.StatusConflict, map[string]string{"error": errValidate.Error()}), nil
