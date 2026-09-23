@@ -83,7 +83,9 @@ CPA `openai-compatibility` providers have no `fork`/`keep-original` or
 be hidden by config. The only route to one visible id is alias == name,
 which dedups in the catalog.
 
-`single_id` writes alias = name after raw_names resolution:
+`single_id` (v0.5.12: deletes the row alias; the earlier v0.5.11 wrote
+alias = name, which on a provider with `prefix` set would leave a
+`prefix/name` clone like `chatgpt/chatgpt/x` in the catalog):
 
 - default: `{name: antigravity/x, alias: antigravity/x}` → one id
   `antigravity/x`
