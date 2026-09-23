@@ -6,7 +6,7 @@
       "name": "Any2Api Bridge",
       "description": "CLIProxyAPI bridge that injects signed identity headers for agy2api and gpt2api providers, enabling per-device routing and conversation continuity.",
       "author": "ngojclee",
-      "version": "0.5.19",
+      "version": "0.5.20",
       "repository": "https://github.com/ngojclee/any2api-bridge",
       "homepage": "https://github.com/ngojclee/any2api-bridge",
       "logo": "https://raw.githubusercontent.com/ngojclee/any2api-bridge/main/assets/logo.svg",

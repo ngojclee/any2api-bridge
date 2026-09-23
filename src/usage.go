@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -913,16 +914,155 @@ func renderUsageShareRows(groups []usageGroup, summary usageSummary, limit int) 
 	var builder strings.Builder
 	for _, group := range groups {
 		percentage, metric := usageShareMetric(group, summary)
+		color := usagePaletteColor(group.Label)
 		builder.WriteString(fmt.Sprintf(
-			`<div class="share-row"><div class="share-row-head"><strong>%s</strong><span>%s</span></div><div class="share-bar"><span style="width:%.1f%%"></span></div><div class="share-meta"><span>%s calls</span><span>%s</span></div></div>`,
+			`<div class="share-row"><div class="share-row-head"><strong><i class="dot" style="background:%s"></i>%s</strong><span>%s</span></div><div class="share-bar"><span style="width:%.1f%%;background:%s"></span></div><div class="share-meta"><span>%s calls</span><span title="%s">%s</span></div></div>`,
+			color,
 			html.EscapeString(group.Label),
 			html.EscapeString(fmt.Sprintf("%.1f%%", percentage)),
 			percentage,
+			color,
 			formatUsageNumber(group.Requests),
+			html.EscapeString(usageThousandsSep(group.TotalTokens)+" tokens · "+usageThousandsSep(group.Requests)+" requests"),
 			html.EscapeString(metric),
 		))
 	}
 	return builder.String()
+}
+
+// renderUsageShareDonut draws the group shares as an SVG donut — pure
+// stroke-dasharray segments so no chart library is needed inside the iframe.
+func renderUsageShareDonut(groups []usageGroup, summary usageSummary, limit int) string {
+	if len(groups) == 0 || summary.TotalTokens <= 0 && summary.Requests <= 0 {
+		return `<div class="usage-empty">No usage records match the current filter.</div>`
+	}
+	if limit > 0 && len(groups) > limit {
+		groups = groups[:limit]
+	}
+	const (
+		size = 168.0
+		r    = 62.0
+		stw  = 22.0
+	)
+	center := size / 2
+	circum := 2 * math.Pi * r
+	var segs strings.Builder
+	offset := 0.0
+	for _, group := range groups {
+		percentage, _ := usageShareMetric(group, summary)
+		seg := percentage / 100 * circum
+		if seg <= 0 {
+			continue
+		}
+		fmt.Fprintf(&segs,
+			`<circle cx="%.0f" cy="%.0f" r="%.0f" fill="none" stroke="%s" stroke-width="%.0f" stroke-dasharray="%.3f %.3f" stroke-dashoffset="%.3f"><title>%s — %.1f%%</title></circle>`,
+			center, center, r, usagePaletteColor(group.Label), stw,
+			math.Max(seg-0.6, 0.4), circum-seg+0.6, -offset,
+			html.EscapeString(group.Label), percentage,
+		)
+		offset += seg
+	}
+	total := summary.Requests
+	return fmt.Sprintf(`<svg class="donut" viewBox="0 0 %.0f %.0f" role="img" aria-label="Model usage share">
+<g transform="rotate(-90 %.0f %.0f)">%s</g>
+<text x="%.0f" y="%.0f" class="donut-total" text-anchor="middle">%s</text>
+<text x="%.0f" y="%.0f" class="donut-caption" text-anchor="middle">requests</text>
+</svg>`,
+		size, size,
+		center, center, segs.String(),
+		center, center-2, formatUsageNumber(total),
+		center, center+14,
+	)
+}
+
+// renderUsageTrendChart draws stacked input/output/cache-read token bars per
+// bucket plus a dashed cache-hit-rate line on a 0-100% secondary axis.
+func renderUsageTrendChart(buckets []usageBucket) string {
+	if len(buckets) == 0 {
+		return `<div class="usage-empty">No usage records match the current filter.</div>`
+	}
+	const (
+		w, h       = 760.0, 230.0
+		padL, padR = 52.0, 46.0
+		padT, padB = 14.0, 26.0
+	)
+	plotW := w - padL - padR
+	plotH := h - padT - padB
+	var maxTokens int64 = 1
+	for _, b := range buckets {
+		if b.TotalTokens > maxTokens {
+			maxTokens = b.TotalTokens
+		}
+	}
+	n := len(buckets)
+	slot := plotW / float64(n)
+	barW := math.Min(slot*0.62, 46)
+	var svg strings.Builder
+	// horizontal gridlines + left axis labels (compact)
+	for i := 0; i <= 4; i++ {
+		y := padT + plotH - plotH*float64(i)/4
+		v := maxTokens * int64(i) / 4
+		fmt.Fprintf(&svg, `<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" class="grid-line"/><text x="%.1f" y="%.1f" class="axis-label" text-anchor="end">%s</text>`,
+			padL, y, w-padR, y, padL-6, y+4, formatUsageNumber(v))
+	}
+	// right axis: cache hit rate 0/50/100%
+	for _, pct := range []int{0, 50, 100} {
+		y := padT + plotH - plotH*float64(pct)/100
+		fmt.Fprintf(&svg, `<text x="%.1f" y="%.1f" class="axis-label rate">%d%%</text>`, w-padR+6, y+4, pct)
+	}
+	// stacked bars
+	type pt struct{ x, y float64 }
+	line := make([]pt, 0, n)
+	for i, b := range buckets {
+		x := padL + slot*float64(i) + (slot-barW)/2
+		y := padT + plotH
+		seg := func(v int64, cls string) {
+			if v <= 0 {
+				return
+			}
+			sh := plotH * float64(v) / float64(maxTokens)
+			y -= sh
+			fmt.Fprintf(&svg, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" class="bar %s"><title>%s — %s</title></rect>`,
+				x, y, barW, sh, cls, html.EscapeString(b.Label), formatUsageNumber(v))
+		}
+		seg(b.PromptTokens, "in")
+		seg(b.CompletionTokens, "out")
+		seg(b.CachedTokens, "cache")
+		rate := 0.0
+		if b.Requests > 0 {
+			rate = float64(b.CacheHits) * 100 / float64(b.Requests)
+		}
+		line = append(line, pt{x + barW/2, padT + plotH - plotH*rate/100})
+		if n <= 16 || i%int(math.Ceil(float64(n)/16)) == 0 {
+			fmt.Fprintf(&svg, `<text x="%.1f" y="%.1f" class="axis-label" text-anchor="middle">%s</text>`,
+				x+barW/2, h-8, html.EscapeString(shortBucketLabel(b.Label)))
+		}
+	}
+	// cache-hit-rate dashed line
+	if len(line) > 1 {
+		var d strings.Builder
+		for i, p := range line {
+			if i == 0 {
+				fmt.Fprintf(&d, "M%.1f %.1f", p.x, p.y)
+			} else {
+				fmt.Fprintf(&d, " L%.1f %.1f", p.x, p.y)
+			}
+		}
+		fmt.Fprintf(&svg, `<path d="%s" class="rate-line" fill="none"/>`, d.String())
+		for _, p := range line {
+			fmt.Fprintf(&svg, `<circle cx="%.1f" cy="%.1f" r="3" class="rate-dot"/>`, p.x, p.y)
+		}
+	}
+	return fmt.Sprintf(`<svg class="trend" viewBox="0 0 %.0f %.0f" preserveAspectRatio="xMidYMid meet">%s</svg>`, w, h, svg.String())
+}
+
+// shortBucketLabel trims bucket labels ("2026-09-23 16:00" -> "16:00",
+// "2026-09-23" stays) so axis ticks do not collide.
+func shortBucketLabel(label string) string {
+	if i := strings.LastIndex(label, " "); i >= 0 && i+1 < len(label) {
+		return label[i+1:]
+	}
+	return label
 }
 
 func renderUsageBucketRows(buckets []usageBucket, limit int) string {
@@ -978,16 +1118,17 @@ func renderUsageMainHTML(data usagePageData, action string) string {
 <div class="card-head"><div><div class="section-title">Usage analytics</div><div class="muted">Passive usage returned by agy2api · %s</div></div><span class="pill">%s</span></div>
 %s
 <div class="usage-metrics">
-<div class="usage-metric"><span>Requests</span><strong>%d</strong></div>
-<div class="usage-metric"><span>Total tokens</span><strong>%s</strong></div>
-<div class="usage-metric"><span>Prompt / output</span><strong>%s / %s</strong></div>
-<div class="usage-metric"><span>Cached tokens</span><strong>%s</strong></div>
+<div class="usage-metric"><span>Requests</span><strong title="%s">%s</strong></div>
+<div class="usage-metric"><span>Total tokens</span><strong title="%s">%s</strong></div>
+<div class="usage-metric"><span>Prompt / output</span><strong title="%s / %s">%s / %s</strong></div>
+<div class="usage-metric"><span>Cached tokens</span><strong title="%s">%s</strong></div>
 <div class="usage-metric"><span>Cache hit rate</span><strong>%s</strong></div>
 <div class="usage-metric"><span>Models / apps</span><strong>%d / %d</strong></div>
 </div>
 </section>
 <div class="usage-analysis-grid">
-<section class="card usage-panel"><div class="card-head"><div><div class="section-title">Model usage share</div><div class="muted">Share is token-based when usage totals exist, otherwise request-based.</div></div><span class="mini-pill">%d models</span></div><div class="share-list">%s</div></section>
+<section class="card usage-panel usage-trend"><div class="card-head"><div><div class="section-title">Token usage trend</div><div class="muted">Input / output / cache read token stack · dashed = cache hit rate</div></div></div>%s<div class="chart-legend"><span><i class="swatch in"></i>Input</span><span><i class="swatch out"></i>Output</span><span><i class="swatch cache"></i>Cache read</span><span><i class="swatch rate"></i>Cache hit rate</span></div></section>
+<section class="card usage-panel"><div class="card-head"><div><div class="section-title">Model usage share</div><div class="muted">Share is token-based when usage totals exist, otherwise request-based.</div></div><span class="mini-pill">%d models</span></div><div class="share-layout"><div class="donut-wrap">%s</div><div class="share-list">%s</div></div></section>
 <section class="card usage-panel"><div class="card-head"><div><div class="section-title">Traffic by client</div><div class="muted">Which CPA-facing app is using the bridge.</div></div><span class="mini-pill">%d sources</span></div><div class="share-list">%s</div></section>
 <section class="card usage-panel"><div class="card-head"><div><div class="section-title">Recent usage</div><div class="muted">Latest observations retained by the plugin.</div></div><span class="mini-pill">last %d</span></div><div class="recent-list">%s</div></section>
 <section class="card usage-panel"><div class="card-head"><div><div class="section-title">Activity buckets</div><div class="muted">Request volume across the selected period.</div></div><span class="mini-pill">%s</span></div><div class="bucket-list">%s</div></section>
@@ -995,15 +1136,22 @@ func renderUsageMainHTML(data usagePageData, action string) string {
 		html.EscapeString(usageFilterLabel(data.Filters)),
 		html.EscapeString(firstNonEmpty(data.Diagnostics.ReplacementMode, "unknown")),
 		renderUsageFilterForm(data, action, "main"),
-		data.Summary.Requests,
+		usageThousandsSep(data.Summary.Requests),
+		formatUsageNumber(data.Summary.Requests),
+		usageThousandsSep(data.Summary.TotalTokens),
 		formatUsageNumber(data.Summary.TotalTokens),
+		usageThousandsSep(data.Summary.PromptTokens),
+		usageThousandsSep(data.Summary.CompletionTokens),
 		formatUsageNumber(data.Summary.PromptTokens),
 		formatUsageNumber(data.Summary.CompletionTokens),
+		usageThousandsSep(data.Summary.CachedTokens),
 		formatUsageNumber(data.Summary.CachedTokens),
 		cacheRate,
 		data.Summary.ModelCount,
 		data.Summary.SourceCount,
+		renderUsageTrendChart(data.Buckets),
 		data.Summary.ModelCount,
+		renderUsageShareDonut(data.TopModels, data.Summary, 8),
 		renderUsageShareRows(data.TopModels, data.Summary, 8),
 		data.Summary.SourceCount,
 		renderUsageShareRows(data.TopSources, data.Summary, 6),
@@ -1016,14 +1164,14 @@ func renderUsageMainHTML(data usagePageData, action string) string {
 
 func renderUsageDrawerHTML(data usagePageData, action string) string {
 	cacheRate := usagePercent(data.Summary.CacheHits, data.Summary.Requests)
-	return fmt.Sprintf(`<div class="drawer-usage-summary"><div class="section-title">Usage snapshot</div><div class="muted">%s</div><div class="drawer-usage-metrics"><span><strong>%d</strong> requests</span><span><strong>%s</strong> tokens</span><span><strong>%s</strong> cache rate</span></div></div>
+	return fmt.Sprintf(`<div class="drawer-usage-summary"><div class="section-title">Usage snapshot</div><div class="muted">%s</div><div class="drawer-usage-metrics"><span><strong>%s</strong> requests</span><span><strong>%s</strong> tokens</span><span><strong>%s</strong> cache rate</span></div></div>
 %s
 <details class="accordion" open><summary>Model usage share <span class="mini-pill">%d</span></summary><div class="accordion-body"><div class="share-list">%s</div></div></details>
 <details class="accordion"><summary>Traffic by client <span class="mini-pill">%d</span></summary><div class="accordion-body"><div class="share-list">%s</div></div></details>
 <details class="accordion"><summary>Recent usage <span class="mini-pill">%d</span></summary><div class="accordion-body"><div class="recent-list">%s</div></div></details>
 <details class="accordion"><summary>Activity buckets <span class="mini-pill">%d</span></summary><div class="accordion-body"><div class="bucket-list">%s</div></div></details>`,
 		html.EscapeString(usageFilterLabel(data.Filters)),
-		data.Summary.Requests,
+		formatUsageNumber(data.Summary.Requests),
 		formatUsageNumber(data.Summary.TotalTokens),
 		cacheRate,
 		renderUsageFilterForm(data, action, "drawer"),
@@ -1349,8 +1497,55 @@ func formatUsageNumber(value any) string {
 }
 
 func formatUsageNumberInt64(value int64) string {
-	if value < 1000 {
-		return strconv.FormatInt(value, 10)
+	abs := value
+	if abs < 0 {
+		abs = -abs
 	}
-	return fmt.Sprintf("%d", value)
+	switch {
+	case abs >= 1_000_000_000:
+		return trimUsageDecimal(float64(value)/1e9) + "B"
+	case abs >= 1_000_000:
+		return trimUsageDecimal(float64(value)/1e6) + "M"
+	default:
+		return usageThousandsSep(value)
+	}
+}
+
+// trimUsageDecimal renders a compact mantissa: 10.5 stays "10.5", 10.0
+// collapses to "10".
+func trimUsageDecimal(v float64) string {
+	s := strconv.FormatFloat(v, 'f', 1, 64)
+	return strings.TrimSuffix(s, ".0")
+}
+
+func usageThousandsSep(value int64) string {
+	digits := strconv.FormatInt(value, 10)
+	neg := strings.HasPrefix(digits, "-")
+	if neg {
+		digits = digits[1:]
+	}
+	var b strings.Builder
+	for i, r := range digits {
+		if i > 0 && (len(digits)-i)%3 == 0 {
+			b.WriteByte(',')
+		}
+		b.WriteRune(r)
+	}
+	if neg {
+		return "-" + b.String()
+	}
+	return b.String()
+}
+
+// usagePaletteColor assigns a stable per-label color: the same model/source
+// keeps the same swatch across renders instead of reshuffling randomly.
+func usagePaletteColor(label string) string {
+	var h uint32 = 2166136261
+	for _, r := range label {
+		h ^= uint32(r)
+		h *= 16777619
+	}
+	hue := h % 360
+	light := 46 + (h>>8)%12 // 46-57% keeps small bars readable on light bg
+	return fmt.Sprintf("hsl(%d,60%%,%d%%)", hue, light)
 }
