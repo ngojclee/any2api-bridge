@@ -528,14 +528,19 @@ type usageViewRecord struct {
 func usageDashboardData(diag providerDiagnostics, filter usageFilter) usagePageData {
 	records := recentUsageRecords()
 	filtered := make([]usageRecord, 0, len(records))
+	periodFiltered := make([]usageRecord, 0, len(records))
 	for _, record := range records {
-		if !recordMatchesUsageFilter(record, filter) {
+		if !recordMatchesUsagePeriod(record, filter) {
+			continue
+		}
+		periodFiltered = append(periodFiltered, record)
+		if !recordMatchesUsageSource(record, filter) {
 			continue
 		}
 		filtered = append(filtered, record)
 	}
 
-	sources := observedUsageSources(filtered)
+	sources := observedUsageSources(periodFiltered)
 	summary := summarizeUsageRecords(filtered)
 	buckets := groupUsageBuckets(filtered, filter.Bucket)
 	topModels := groupUsageGroups(filtered, func(record usageRecord) string {
@@ -575,6 +580,10 @@ func usageDashboardData(diag providerDiagnostics, filter usageFilter) usagePageD
 }
 
 func recordMatchesUsageFilter(record usageRecord, filter usageFilter) bool {
+	return recordMatchesUsagePeriod(record, filter) && recordMatchesUsageSource(record, filter)
+}
+
+func recordMatchesUsagePeriod(record usageRecord, filter usageFilter) bool {
 	now := time.Now().UTC()
 	recordAt := record.At.UTC()
 	switch filter.Period {
@@ -595,6 +604,10 @@ func recordMatchesUsageFilter(record usageRecord, filter usageFilter) bool {
 			return false
 		}
 	}
+	return true
+}
+
+func recordMatchesUsageSource(record usageRecord, filter usageFilter) bool {
 	if filter.Source != "" && filter.Source != "all" {
 		if !strings.EqualFold(record.ClientApp, filter.Source) {
 			return false
@@ -982,9 +995,9 @@ func renderUsageTrendChart(buckets []usageBucket) string {
 		return `<div class="usage-empty">No usage records match the current filter.</div>`
 	}
 	const (
-		w, h       = 760.0, 244.0
+		w, h       = 760.0, 296.0
 		padL, padR = 52.0, 46.0
-		padT, padB = 14.0, 38.0
+		padT, padB = 14.0, 62.0
 	)
 	plotW := w - padL - padR
 	plotH := h - padT - padB
@@ -1035,7 +1048,7 @@ func renderUsageTrendChart(buckets []usageBucket) string {
 		line = append(line, pt{x + barW/2, padT + plotH - plotH*rate/100})
 		if n <= 20 || i%int(math.Ceil(float64(n)/20)) == 0 {
 			fmt.Fprintf(&svg, `<text x="%.1f" y="%.1f" class="axis-label" text-anchor="end" transform="rotate(-45 %.1f %.1f)">%s</text>`,
-				x+barW/2, h-10, x+barW/2, h-10, html.EscapeString(shortBucketLabel(b.Label)))
+				x+barW/2, padT+plotH+8, x+barW/2, padT+plotH+8, html.EscapeString(shortBucketLabel(b.Label)))
 		}
 	}
 	// cache-hit-rate dashed line
@@ -1143,13 +1156,13 @@ func renderUsageMainHTML(data usagePageData, action string) string {
 		usageThousandsSep(data.Summary.Requests),
 		formatUsageNumber(data.Summary.Requests),
 		usageThousandsSep(data.Summary.TotalTokens),
-		formatUsageNumber(data.Summary.TotalTokens),
+		formatUsageTotal(data.Summary.TotalTokens),
 		usageThousandsSep(data.Summary.PromptTokens),
 		usageThousandsSep(data.Summary.CompletionTokens),
 		formatUsageNumber(data.Summary.PromptTokens),
 		formatUsageNumber(data.Summary.CompletionTokens),
 		usageThousandsSep(data.Summary.CachedTokens),
-		formatUsageNumber(data.Summary.CachedTokens),
+		formatUsageTotal(data.Summary.CachedTokens),
 		cacheRate,
 		data.Summary.ModelCount,
 		data.Summary.SourceCount,
@@ -1176,7 +1189,7 @@ func renderUsageDrawerHTML(data usagePageData, action string) string {
 <details class="accordion"><summary>Activity buckets <span class="mini-pill">%d</span></summary><div class="accordion-body"><div class="bucket-list">%s</div></div></details>`,
 		html.EscapeString(usageFilterLabel(data.Filters)),
 		formatUsageNumber(data.Summary.Requests),
-		formatUsageNumber(data.Summary.TotalTokens),
+		formatUsageTotal(data.Summary.TotalTokens),
 		cacheRate,
 		renderUsageFilterForm(data, action, "drawer"),
 		data.Summary.ModelCount,
@@ -1222,10 +1235,10 @@ func usageDashboardHTML(data usagePageData) string {
 <div class="metric"><span>Sources</span><strong>%d</strong></div>
 </div></section>`,
 		data.Summary.Requests,
-		formatUsageNumber(data.Summary.TotalTokens),
+		formatUsageTotal(data.Summary.TotalTokens),
 		formatUsageNumber(data.Summary.PromptTokens),
 		formatUsageNumber(data.Summary.CompletionTokens),
-		formatUsageNumber(data.Summary.CachedTokens),
+		formatUsageTotal(data.Summary.CachedTokens),
 		data.Summary.CacheHits,
 		data.Summary.ModelCount,
 		data.Summary.SourceCount,
@@ -1509,6 +1522,26 @@ func formatUsageNumberInt64(value int64) string {
 	case abs >= 1_000_000_000:
 		return trimUsageDecimal(float64(value)/1e9) + "B"
 	case abs >= 1_000_000:
+		return trimUsageDecimal(float64(value)/1e6) + "M"
+	default:
+		return usageThousandsSep(value)
+	}
+}
+
+// formatUsageTotal renders large cumulative totals (total tokens, cached
+// tokens) with plain thousands separators until the value reaches 100M, then
+// compacts to M / B / T.
+func formatUsageTotal(value int64) string {
+	abs := value
+	if abs < 0 {
+		abs = -abs
+	}
+	switch {
+	case abs >= 1_000_000_000_000:
+		return trimUsageDecimal(float64(value)/1e12) + "T"
+	case abs >= 1_000_000_000:
+		return trimUsageDecimal(float64(value)/1e9) + "B"
+	case abs >= 100_000_000:
 		return trimUsageDecimal(float64(value)/1e6) + "M"
 	default:
 		return usageThousandsSep(value)
