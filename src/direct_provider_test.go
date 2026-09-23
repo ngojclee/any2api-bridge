@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/router-for-me/CLIProxyAPI/v7/sdk/pluginapi"
 )
 
 func TestDirectProviderUpsertUpdatesOriginalProviderOnly(t *testing.T) {
@@ -623,6 +625,30 @@ openai-compatibility:
 	models = compatModels(openAICompatEntries(root)[0])
 	if models[0].Name != "gemini-3.8-flash" || models[0].Alias != "" {
 		t.Fatalf("single_id+raw_names row = %+v", models[0])
+	}
+}
+
+func TestDirectFlagOverridesReadsJSONBody(t *testing.T) {
+	request := pluginapi.ManagementRequest{
+		Body: []byte(`{"account_id":"agy-prod","raw_names":"1","manual_alias":"0","single_id":"1"}`),
+	}
+	account := directAccount{AccountID: "agy-prod", ManualAlias: true}
+	directFlagOverrides(request, &account)
+	if !account.RawNames || account.ManualAlias || !account.SingleID {
+		t.Fatalf("json body flags not applied: %+v", account)
+	}
+	// Boolean JSON values and query values must work too.
+	request.Body = []byte(`{"raw_names":false}`)
+	account = directAccount{AccountID: "agy-prod", RawNames: true}
+	directFlagOverrides(request, &account)
+	if account.RawNames {
+		t.Fatalf("bool json body flag not applied: %+v", account)
+	}
+	request = pluginapi.ManagementRequest{Path: "/direct/accounts/scan/upsert?single_id=1"}
+	account = directAccount{AccountID: "agy-prod"}
+	directFlagOverrides(request, &account)
+	if !account.SingleID {
+		t.Fatalf("query flag not applied: %+v", account)
 	}
 }
 
