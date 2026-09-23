@@ -982,9 +982,9 @@ func renderUsageTrendChart(buckets []usageBucket) string {
 		return `<div class="usage-empty">No usage records match the current filter.</div>`
 	}
 	const (
-		w, h       = 760.0, 230.0
+		w, h       = 760.0, 244.0
 		padL, padR = 52.0, 46.0
-		padT, padB = 14.0, 26.0
+		padT, padB = 14.0, 38.0
 	)
 	plotW := w - padL - padR
 	plotH := h - padT - padB
@@ -1033,9 +1033,9 @@ func renderUsageTrendChart(buckets []usageBucket) string {
 			rate = float64(b.CacheHits) * 100 / float64(b.Requests)
 		}
 		line = append(line, pt{x + barW/2, padT + plotH - plotH*rate/100})
-		if n <= 16 || i%int(math.Ceil(float64(n)/16)) == 0 {
-			fmt.Fprintf(&svg, `<text x="%.1f" y="%.1f" class="axis-label" text-anchor="middle">%s</text>`,
-				x+barW/2, h-8, html.EscapeString(shortBucketLabel(b.Label)))
+		if n <= 20 || i%int(math.Ceil(float64(n)/20)) == 0 {
+			fmt.Fprintf(&svg, `<text x="%.1f" y="%.1f" class="axis-label" text-anchor="end" transform="rotate(-45 %.1f %.1f)">%s</text>`,
+				x+barW/2, h-10, x+barW/2, h-10, html.EscapeString(shortBucketLabel(b.Label)))
 		}
 	}
 	// cache-hit-rate dashed line
@@ -1057,10 +1057,14 @@ func renderUsageTrendChart(buckets []usageBucket) string {
 }
 
 // shortBucketLabel trims bucket labels ("2026-09-23 16:00" -> "16:00",
-// "2026-09-23" stays) so axis ticks do not collide.
+// "2026-09-23" -> "09-23") so rotated axis ticks stay readable.
 func shortBucketLabel(label string) string {
 	if i := strings.LastIndex(label, " "); i >= 0 && i+1 < len(label) {
 		return label[i+1:]
+	}
+	// Drop the year on ISO day/month/week labels once rotated.
+	if len(label) >= 6 && label[4] == '-' {
+		return label[5:]
 	}
 	return label
 }
