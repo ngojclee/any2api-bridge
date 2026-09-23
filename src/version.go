@@ -1,4 +1,4 @@
 package main
 
 // pluginVersion is stamped by CI with -ldflags "-X main.pluginVersion=...".
-var pluginVersion = "0.5.11-dev"
+var pluginVersion = "0.5.12-dev"
