@@ -33,3 +33,19 @@ Devin `Gemini 3 Flash` upstreams exist but the account lacks quota.
 
 Catalog: 285 models; no duplicate `devin/x` originals alongside aliases
 (fork off = alias replaces original id).
+
+## Follow-up (v0.5.18 + v0.5.19)
+
+- v0.5.18: models table "Client alias" cell wrapped in `<code>` — matches the
+  monospace upstream column (font/spacing mismatch the owner spotted).
+- v0.5.19: `effectiveDirectModelAliases` — under `single_id` the
+  `account.models` alias cache now stores the effective catalog id (the wire
+  name clients call) instead of a materialized `prefix/x` that no longer
+  exists in the catalog. Antigravity cache shows bare slugs; chatgpt shows
+  `gpt-5.5-high` (stripped under raw_names). Verified via live scan/upsert
+  through the management API in the owner's browser session.
+- One transient: the first chatgpt scan-upsert request landed with
+  single_id unset (prefix re-added, alias cache materialized prefixed);
+  re-running the same request persisted `single_id: true` and restored the
+  bare single-id provider rows. Flag state verified in config and via the
+  accounts endpoint after the re-run.
