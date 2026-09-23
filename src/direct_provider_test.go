@@ -530,3 +530,54 @@ openai-compatibility:
 		t.Fatalf("new row missing namespaced name: %+v", byName["antigravity/gemini-3.7-flash"])
 	}
 }
+
+func TestDirectProviderRawNamesAndManualAliasOptOut(t *testing.T) {
+	raw := []byte(`
+openai-compatibility:
+  - name: Antigravity
+    prefix: antigravity
+    base-url: https://agy.example/v1
+    models:
+      - name: gemini-3.8-flash
+        alias: my-alias
+`)
+	account := directAccount{
+		AccountID:   "agy-prod",
+		ChannelName: "Antigravity",
+		Prefix:      "antigravity",
+		BaseURL:     "https://agy.example/v1",
+		Enabled:     true,
+		RawNames:    true,
+		ManualAlias: true,
+		Models: []directAccountModel{
+			{UpstreamID: "gemini-3.8-flash", Alias: "antigravity/gemini-3.8-flash", Enabled: true},
+			{UpstreamID: "gemini-3.7-flash", Alias: "antigravity/gemini-3.7-flash", Enabled: true},
+		},
+	}
+	updated, _, errPatch := patchDirectProviderConfig(raw, account)
+	if errPatch != nil {
+		t.Fatal(errPatch)
+	}
+	root, _ := parseYAMLMap(updated)
+	models := compatModels(openAICompatEntries(root)[0])
+	byName := map[string]modelSpec{}
+	for _, m := range models {
+		byName[m.Name] = m
+	}
+	// raw_names: wire names stay at the bare upstream id.
+	row, ok := byName["gemini-3.8-flash"]
+	if !ok {
+		t.Fatalf("raw_names row missing: %#v", models)
+	}
+	// manual_alias: the operator's alias is untouched and new rows get none.
+	if row.Alias != "my-alias" {
+		t.Fatalf("manual_alias touched an existing alias: %+v", row)
+	}
+	newRow, ok := byName["gemini-3.7-flash"]
+	if !ok {
+		t.Fatalf("raw_names new row missing: %#v", models)
+	}
+	if newRow.Alias != "" {
+		t.Fatalf("manual_alias still wrote an alias: %+v", newRow)
+	}
+}
