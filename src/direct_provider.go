@@ -283,6 +283,15 @@ func directAccountsForConfig(accounts []directAccount) []any {
 			"identity_signing_enabled": account.IdentitySigningEnabled,
 			"weight":                   account.Weight,
 		}
+		if account.RawNames {
+			entry["raw_names"] = true
+		}
+		if account.ManualAlias {
+			entry["manual_alias"] = true
+		}
+		if account.SingleID {
+			entry["single_id"] = true
+		}
 		if account.Label != "" {
 			entry["label"] = account.Label
 		}
