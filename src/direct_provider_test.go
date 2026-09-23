@@ -609,8 +609,8 @@ openai-compatibility:
 	if len(models) != 1 {
 		t.Fatalf("expected one model row, got %#v", models)
 	}
-	if models[0].Name != "antigravity/gemini-3.8-flash" || models[0].Alias != "antigravity/gemini-3.8-flash" {
-		t.Fatalf("single_id did not collapse alias to the wire name: %+v", models[0])
+	if models[0].Name != "antigravity/gemini-3.8-flash" || models[0].Alias != "" {
+		t.Fatalf("single_id did not drop the alias for one catalog id: %+v", models[0])
 	}
 
 	// With raw_names the single visible id is the bare upstream id.
@@ -621,7 +621,7 @@ openai-compatibility:
 	}
 	root, _ = parseYAMLMap(updated)
 	models = compatModels(openAICompatEntries(root)[0])
-	if models[0].Name != "gemini-3.8-flash" || models[0].Alias != "gemini-3.8-flash" {
+	if models[0].Name != "gemini-3.8-flash" || models[0].Alias != "" {
 		t.Fatalf("single_id+raw_names row = %+v", models[0])
 	}
 }

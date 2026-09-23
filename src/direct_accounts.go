@@ -27,9 +27,9 @@ type directAccount struct {
 	IdentitySigningEnabled bool   `yaml:"identity_signing_enabled" json:"identity_signing_enabled"`
 	// RawNames keeps provider row "name" at the upstream id instead of the
 	// namespaced wire name (prefix + "/" + id). ManualAlias leaves the row
-	// "alias" to the operator: scan/upsert never writes it. SingleID writes
-	// alias = name so CPA's catalog dedups the pair into one visible id —
-	// the compat-provider equivalent of OAuth's "keep original" toggle off.
+	// "alias" to the operator: scan/upsert never writes it. SingleID drops
+	// the row alias so CPA registers only the wire name — one catalog id
+	// per model, the compat-provider equivalent of "keep original" off.
 	RawNames      bool                 `yaml:"raw_names" json:"raw_names"`
 	ManualAlias   bool                 `yaml:"manual_alias" json:"manual_alias"`
 	SingleID      bool                 `yaml:"single_id" json:"single_id"`
