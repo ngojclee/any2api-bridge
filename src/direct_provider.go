@@ -521,6 +521,12 @@ func mergeDirectProviderModels(provider map[string]any, account directAccount, c
 			continue
 		}
 		index, exists := indexByName[strings.ToLower(model.UpstreamID)]
+		if !exists {
+			// RawNames strips the account prefix, so a row written as the
+			// bare slug "x" must still match a namespaced upstream id
+			// "chatgpt/x" on the next scan.
+			index, exists = indexByName[strings.ToLower(trimDirectAliasPrefix(account.Prefix, model.UpstreamID))]
+		}
 		if !exists || index < 0 || index >= len(rows) {
 			rows = append(rows, directAccountModelRow(model, account))
 			indexByName[strings.ToLower(model.UpstreamID)] = len(rows) - 1
@@ -551,7 +557,9 @@ func directAccountModelRow(model directAccountModel, account directAccount) map[
 // bare; a custom bare alias the operator set by hand is left alone.
 func mergeDirectAccountModelRow(row map[string]any, model directAccountModel, account directAccount) {
 	if account.RawNames {
-		row["name"] = model.UpstreamID
+		// Bare upstream slug: strip the account namespace so a namespaced
+		// upstream id like "chatgpt/x" lands as "x" in the name column.
+		row["name"] = trimDirectAliasPrefix(account.Prefix, model.UpstreamID)
 	} else {
 		row["name"] = directProviderWireName(model.UpstreamID, account.Prefix)
 	}
