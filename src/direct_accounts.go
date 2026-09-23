@@ -16,23 +16,28 @@ const (
 )
 
 type directAccount struct {
-	AccountID              string               `yaml:"account_id" json:"account_id"`
-	ProviderKind           string               `yaml:"provider_kind" json:"provider_kind"`
-	Label                  string               `yaml:"label" json:"label"`
-	ChannelName            string               `yaml:"channel_name" json:"channel_name"`
-	Prefix                 string               `yaml:"prefix" json:"prefix"`
-	BaseURL                string               `yaml:"base_url" json:"base_url"`
-	Enabled                bool                 `yaml:"enabled" json:"enabled"`
-	Priority               int                  `yaml:"priority" json:"priority"`
-	IdentitySigningEnabled bool                 `yaml:"identity_signing_enabled" json:"identity_signing_enabled"`
-	AuthID                 string               `yaml:"auth_id" json:"auth_id"`
-	APIKey                 string               `yaml:"api_key" json:"api_key"`
-	Weight                 int                  `yaml:"weight" json:"weight"`
-	ProxyURL               string               `yaml:"proxy_url" json:"proxy_url"`
-	StaticHeaders          map[string]string    `yaml:"headers" json:"headers"`
-	Models                 []directAccountModel `yaml:"models" json:"models"`
-	weightSet              bool
-	prioritySet            bool
+	AccountID              string `yaml:"account_id" json:"account_id"`
+	ProviderKind           string `yaml:"provider_kind" json:"provider_kind"`
+	Label                  string `yaml:"label" json:"label"`
+	ChannelName            string `yaml:"channel_name" json:"channel_name"`
+	Prefix                 string `yaml:"prefix" json:"prefix"`
+	BaseURL                string `yaml:"base_url" json:"base_url"`
+	Enabled                bool   `yaml:"enabled" json:"enabled"`
+	Priority               int    `yaml:"priority" json:"priority"`
+	IdentitySigningEnabled bool   `yaml:"identity_signing_enabled" json:"identity_signing_enabled"`
+	// RawNames keeps provider row "name" at the upstream id instead of the
+	// namespaced wire name (prefix + "/" + id). ManualAlias leaves the row
+	// "alias" to the operator: scan/upsert never writes it.
+	RawNames      bool                 `yaml:"raw_names" json:"raw_names"`
+	ManualAlias   bool                 `yaml:"manual_alias" json:"manual_alias"`
+	AuthID        string               `yaml:"auth_id" json:"auth_id"`
+	APIKey        string               `yaml:"api_key" json:"api_key"`
+	Weight        int                  `yaml:"weight" json:"weight"`
+	ProxyURL      string               `yaml:"proxy_url" json:"proxy_url"`
+	StaticHeaders map[string]string    `yaml:"headers" json:"headers"`
+	Models        []directAccountModel `yaml:"models" json:"models"`
+	weightSet     bool
+	prioritySet   bool
 }
 
 type directAccountModel struct {
@@ -121,6 +126,12 @@ func directAccountFromMap(raw map[string]any) directAccount {
 	}
 	if signing, ok := boolValue(raw, "identity_signing_enabled", "identity-signing-enabled", "signing_enabled", "signing-enabled"); ok {
 		account.IdentitySigningEnabled = signing
+	}
+	if rawNames, ok := boolValue(raw, "raw_names", "raw-names"); ok {
+		account.RawNames = rawNames
+	}
+	if manualAlias, ok := boolValue(raw, "manual_alias", "manual-alias"); ok {
+		account.ManualAlias = manualAlias
 	}
 	account.AuthID, _ = stringValue(raw, "auth_id", "auth-id", "selected_auth_id", "selected-auth-id", "cpa_auth_id", "cpa-auth-id")
 	account.APIKey, _ = stringValue(raw, "api_key", "api-key")

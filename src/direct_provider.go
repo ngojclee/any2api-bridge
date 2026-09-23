@@ -76,6 +76,15 @@ func handleDirectProviderScanUpsert(request pluginapi.ManagementRequest) ([]byte
 	if !found {
 		return managementJSONResponse(http.StatusNotFound, map[string]string{"error": "direct account not found"}), nil
 	}
+	// Console checkboxes ride along as explicit overrides; they persist onto
+	// the stored account through mergeDirectAccountByID + storeDirectSettings
+	// below, so the next scan starts from the same choice.
+	if value := firstRequestQueryValue(request, "raw_names", "raw-names"); value != "" {
+		account.RawNames = value == "1" || strings.EqualFold(value, "true")
+	}
+	if value := firstRequestQueryValue(request, "manual_alias", "manual-alias"); value != "" {
+		account.ManualAlias = value == "1" || strings.EqualFold(value, "true")
+	}
 	status, scanned, errProbe := scanDirectAccountModels(settings, account)
 	if errProbe != nil {
 		return managementJSONResponse(http.StatusBadGateway, map[string]any{
@@ -467,7 +476,7 @@ func mergeDirectProviderModels(provider map[string]any, account directAccount, c
 		}
 		index, exists := indexByName[strings.ToLower(model.UpstreamID)]
 		if !exists || index < 0 || index >= len(rows) {
-			rows = append(rows, directAccountModelRow(model, account.Prefix))
+			rows = append(rows, directAccountModelRow(model, account))
 			indexByName[strings.ToLower(model.UpstreamID)] = len(rows) - 1
 			continue
 		}
@@ -476,16 +485,16 @@ func mergeDirectProviderModels(provider map[string]any, account directAccount, c
 			existing = map[string]any{}
 			rows[index] = existing
 		}
-		mergeDirectAccountModelRow(existing, model, account.Prefix)
+		mergeDirectAccountModelRow(existing, model, account)
 	}
 	if len(rows) > 0 {
 		setAny(provider, "models", rows, changed)
 	}
 }
 
-func directAccountModelRow(model directAccountModel, prefix string) map[string]any {
+func directAccountModelRow(model directAccountModel, account directAccount) map[string]any {
 	row := map[string]any{"name": model.UpstreamID}
-	mergeDirectAccountModelRow(row, model, prefix)
+	mergeDirectAccountModelRow(row, model, account)
 	return row
 }
 
@@ -494,18 +503,24 @@ func directAccountModelRow(model directAccountModel, prefix string) map[string]a
 // "chatgpt/x" lands as "x", which registers both "x" and "chatgpt/x".
 // An existing prefixed alias (written before this rule) is healed back to
 // bare; a custom bare alias the operator set by hand is left alone.
-func mergeDirectAccountModelRow(row map[string]any, model directAccountModel, prefix string) {
-	row["name"] = directProviderWireName(model.UpstreamID, prefix)
-	alias := strings.TrimSpace(model.Alias)
-	if alias == "" {
-		alias = strings.TrimSpace(model.UpstreamID)
+func mergeDirectAccountModelRow(row map[string]any, model directAccountModel, account directAccount) {
+	if account.RawNames {
+		row["name"] = model.UpstreamID
+	} else {
+		row["name"] = directProviderWireName(model.UpstreamID, account.Prefix)
 	}
-	alias = trimDirectAliasPrefix(prefix, alias)
-	if alias != "" {
-		existing, _ := stringValue(row, "alias")
-		prefixed := strings.ToLower(strings.Trim(strings.TrimSpace(prefix), "/")) + "/"
-		if existing == "" || strings.HasPrefix(strings.ToLower(existing), prefixed) {
-			row["alias"] = alias
+	if !account.ManualAlias {
+		alias := strings.TrimSpace(model.Alias)
+		if alias == "" {
+			alias = strings.TrimSpace(model.UpstreamID)
+		}
+		alias = trimDirectAliasPrefix(account.Prefix, alias)
+		if alias != "" {
+			existing, _ := stringValue(row, "alias")
+			prefixed := strings.ToLower(strings.Trim(strings.TrimSpace(account.Prefix), "/")) + "/"
+			if existing == "" || strings.HasPrefix(strings.ToLower(existing), prefixed) {
+				row["alias"] = alias
+			}
 		}
 	}
 	if model.Image {
