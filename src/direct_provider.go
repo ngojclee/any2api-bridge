@@ -87,6 +87,13 @@ func handleDirectProviderScanUpsert(request pluginapi.ManagementRequest) ([]byte
 	}
 	account.Models = mergeDirectCatalogSpecs(scanned, account.Models, maxDirectModels)
 	account.Models = prefixDirectModelAliases(account.Prefix, account.Models)
+	merged, _ := mergeDirectAccountByID(settings.DirectAccounts, account)
+	if errValidate := validateDirectAccounts(merged); errValidate != nil {
+		return managementJSONResponse(http.StatusConflict, map[string]string{"error": errValidate.Error()}), nil
+	}
+	if _, errStore := storeDirectSettings(&merged, nil); errStore != nil {
+		return managementJSONResponse(http.StatusInternalServerError, map[string]string{"error": errStore.Error()}), nil
+	}
 	snapshot := currentConfigSnapshot()
 	if !snapshot.ConfigPathFound || strings.TrimSpace(snapshot.ConfigPath) == "" {
 		return managementJSONResponse(http.StatusConflict, map[string]string{"error": "mounted CPA config path was not found"}), nil
@@ -425,7 +432,7 @@ func mergeDirectProviderModels(provider map[string]any, account directAccount, c
 		}
 		index, exists := indexByName[strings.ToLower(model.UpstreamID)]
 		if !exists || index < 0 || index >= len(rows) {
-			rows = append(rows, directAccountModelRow(model))
+			rows = append(rows, directAccountModelRow(model, account.Prefix))
 			indexByName[strings.ToLower(model.UpstreamID)] = len(rows) - 1
 			continue
 		}
@@ -434,23 +441,37 @@ func mergeDirectProviderModels(provider map[string]any, account directAccount, c
 			existing = map[string]any{}
 			rows[index] = existing
 		}
-		mergeDirectAccountModelRow(existing, model)
+		mergeDirectAccountModelRow(existing, model, account.Prefix)
 	}
 	if len(rows) > 0 {
 		setAny(provider, "models", rows, changed)
 	}
 }
 
-func directAccountModelRow(model directAccountModel) map[string]any {
+func directAccountModelRow(model directAccountModel, prefix string) map[string]any {
 	row := map[string]any{"name": model.UpstreamID}
-	mergeDirectAccountModelRow(row, model)
+	mergeDirectAccountModelRow(row, model, prefix)
 	return row
 }
 
-func mergeDirectAccountModelRow(row map[string]any, model directAccountModel) {
+// CPA re-prefixes a provider row's alias at model registration
+// ("prefix/alias"), so the row stores the bare form: an account alias of
+// "chatgpt/x" lands as "x", which registers both "x" and "chatgpt/x".
+// An existing prefixed alias (written before this rule) is healed back to
+// bare; a custom bare alias the operator set by hand is left alone.
+func mergeDirectAccountModelRow(row map[string]any, model directAccountModel, prefix string) {
 	row["name"] = model.UpstreamID
-	if model.Alias != "" {
-		row["alias"] = model.Alias
+	alias := strings.TrimSpace(model.Alias)
+	if alias == "" {
+		alias = strings.TrimSpace(model.UpstreamID)
+	}
+	alias = trimDirectAliasPrefix(prefix, alias)
+	if alias != "" {
+		existing, _ := stringValue(row, "alias")
+		prefixed := strings.ToLower(strings.Trim(strings.TrimSpace(prefix), "/")) + "/"
+		if existing == "" || strings.HasPrefix(strings.ToLower(existing), prefixed) {
+			row["alias"] = alias
+		}
 	}
 	if model.Image {
 		row["image"] = true
@@ -464,6 +485,14 @@ func mergeDirectAccountModelRow(row map[string]any, model directAccountModel) {
 	if model.Thinking != nil {
 		row["thinking"] = model.Thinking
 	}
+}
+
+func trimDirectAliasPrefix(prefix, alias string) string {
+	p := strings.ToLower(strings.Trim(strings.TrimSpace(prefix), "/"))
+	if p != "" && strings.HasPrefix(strings.ToLower(alias), p+"/") {
+		return alias[len(p)+1:]
+	}
+	return alias
 }
 
 func findDirectProviderIndex(entries []map[string]any, account directAccount) int {
