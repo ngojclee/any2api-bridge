@@ -74,3 +74,23 @@ Test: `TestDirectProviderRescanFindsRowsByNamespacedWireName` (v0.5.9),
 `TestDirectProviderRawNamesAndManualAliasOptOut` (v0.5.10). v0.5.10
 deployed: `.so` installed, version pinned, `plugin loaded
 version=0.5.10` confirmed.
+
+## Follow-up: single_id catalog collapse (v0.5.11)
+
+CPA `openai-compatibility` providers have no `fork`/`keep-original` or
+`excluded-models` knob (those are OAuth-provider features) — `name` and
+`alias` always both register, and `name` is the wire name so it cannot
+be hidden by config. The only route to one visible id is alias == name,
+which dedups in the catalog.
+
+`single_id` writes alias = name after raw_names resolution:
+
+- default: `{name: antigravity/x, alias: antigravity/x}` → one id
+  `antigravity/x`
+- with `raw_names`: `{name: x, alias: x}` → one id `x` (upstream must
+  accept bare ids: agy2api does; gpt2api currently rejects bare)
+
+Takes precedence over `manual_alias` (explicit write instruction).
+Third checkbox in the Models tab, persisted on the account like the
+others. Test `TestDirectProviderSingleIDCollapsesAliasToName` covers
+both shapes. Deployed: `plugin loaded version=0.5.11`.
