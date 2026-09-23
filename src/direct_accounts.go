@@ -241,7 +241,13 @@ func validateDirectAccounts(accounts []directAccount) error {
 		activeChannels[channelKey] = account
 		channelModelIDs := map[string]string{}
 		for _, model := range account.Models {
-			if !model.Enabled || model.UpstreamID == "" {
+			// Unavailable rows are historical records (upstream stopped
+			// serving the id); they never reach the provider's model list,
+			// so they must not participate in alias uniqueness checks —
+			// e.g. after a namespace rename a stale "chatgpt-web/x" keeps
+			// the generated alias "chatgpt/x" that now belongs to the live
+			// "chatgpt/x" model.
+			if !model.Enabled || model.Unavailable || model.UpstreamID == "" {
 				continue
 			}
 			modelID := model.Alias
