@@ -634,6 +634,55 @@ openai-compatibility:
 	}
 }
 
+func TestDirectProviderRawNamesStripsUpstreamNamespace(t *testing.T) {
+	raw := []byte(`
+openai-compatibility:
+  - name: ChatGPT
+    prefix: chatgpt
+    base-url: https://gpt.example/v1
+    models:
+      - name: chatgpt/gpt-5.5-high
+`)
+	account := directAccount{
+		AccountID:   "gpt-prod",
+		ChannelName: "ChatGPT",
+		Prefix:      "chatgpt",
+		BaseURL:     "https://gpt.example/v1",
+		Enabled:     true,
+		RawNames:    true,
+		SingleID:    true,
+		Models: []directAccountModel{
+			{UpstreamID: "chatgpt/gpt-5.5-high", Enabled: true},
+		},
+	}
+	updated, _, errPatch := patchDirectProviderConfig(raw, account)
+	if errPatch != nil {
+		t.Fatal(errPatch)
+	}
+	root, _ := parseYAMLMap(updated)
+	entries := openAICompatEntries(root)
+	models := compatModels(entries[0])
+	// The upstream id carries the chatgpt/ namespace; RawNames strips it so
+	// the name column is the bare slug — exactly one catalog id, no prefix.
+	if len(models) != 1 || models[0].Name != "gpt-5.5-high" || models[0].Alias != "" {
+		t.Fatalf("raw_names did not strip upstream namespace: %#v", models)
+	}
+	if _, hasPrefix := entries[0]["prefix"]; hasPrefix {
+		t.Fatalf("single_id left provider prefix: %#v", entries[0])
+	}
+	// Rescan must match the bare row by the stripped upstream id, not
+	// append a duplicate.
+	updated, _, errPatch = patchDirectProviderConfig(updated, account)
+	if errPatch != nil {
+		t.Fatal(errPatch)
+	}
+	root, _ = parseYAMLMap(updated)
+	models = compatModels(openAICompatEntries(root)[0])
+	if len(models) != 1 || models[0].Name != "gpt-5.5-high" {
+		t.Fatalf("rescan duplicated the stripped row: %#v", models)
+	}
+}
+
 func TestDirectFlagOverridesReadsJSONBody(t *testing.T) {
 	request := pluginapi.ManagementRequest{
 		Body: []byte(`{"account_id":"agy-prod","raw_names":"1","manual_alias":"0","single_id":"1"}`),
