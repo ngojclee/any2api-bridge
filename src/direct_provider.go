@@ -85,6 +85,9 @@ func handleDirectProviderScanUpsert(request pluginapi.ManagementRequest) ([]byte
 	if value := firstRequestQueryValue(request, "manual_alias", "manual-alias"); value != "" {
 		account.ManualAlias = value == "1" || strings.EqualFold(value, "true")
 	}
+	if value := firstRequestQueryValue(request, "single_id", "single-id"); value != "" {
+		account.SingleID = value == "1" || strings.EqualFold(value, "true")
+	}
 	status, scanned, errProbe := scanDirectAccountModels(settings, account)
 	if errProbe != nil {
 		return managementJSONResponse(http.StatusBadGateway, map[string]any{
@@ -509,7 +512,9 @@ func mergeDirectAccountModelRow(row map[string]any, model directAccountModel, ac
 	} else {
 		row["name"] = directProviderWireName(model.UpstreamID, account.Prefix)
 	}
-	if !account.ManualAlias {
+	if account.SingleID {
+		row["alias"] = row["name"]
+	} else if !account.ManualAlias {
 		alias := strings.TrimSpace(model.Alias)
 		if alias == "" {
 			alias = strings.TrimSpace(model.UpstreamID)

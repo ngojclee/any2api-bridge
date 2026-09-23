@@ -27,9 +27,12 @@ type directAccount struct {
 	IdentitySigningEnabled bool   `yaml:"identity_signing_enabled" json:"identity_signing_enabled"`
 	// RawNames keeps provider row "name" at the upstream id instead of the
 	// namespaced wire name (prefix + "/" + id). ManualAlias leaves the row
-	// "alias" to the operator: scan/upsert never writes it.
+	// "alias" to the operator: scan/upsert never writes it. SingleID writes
+	// alias = name so CPA's catalog dedups the pair into one visible id —
+	// the compat-provider equivalent of OAuth's "keep original" toggle off.
 	RawNames      bool                 `yaml:"raw_names" json:"raw_names"`
 	ManualAlias   bool                 `yaml:"manual_alias" json:"manual_alias"`
+	SingleID      bool                 `yaml:"single_id" json:"single_id"`
 	AuthID        string               `yaml:"auth_id" json:"auth_id"`
 	APIKey        string               `yaml:"api_key" json:"api_key"`
 	Weight        int                  `yaml:"weight" json:"weight"`
@@ -132,6 +135,9 @@ func directAccountFromMap(raw map[string]any) directAccount {
 	}
 	if manualAlias, ok := boolValue(raw, "manual_alias", "manual-alias"); ok {
 		account.ManualAlias = manualAlias
+	}
+	if singleID, ok := boolValue(raw, "single_id", "single-id"); ok {
+		account.SingleID = singleID
 	}
 	account.AuthID, _ = stringValue(raw, "auth_id", "auth-id", "selected_auth_id", "selected-auth-id", "cpa_auth_id", "cpa-auth-id")
 	account.APIKey, _ = stringValue(raw, "api_key", "api-key")
