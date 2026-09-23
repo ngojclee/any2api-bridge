@@ -68,6 +68,9 @@ type directAccountView struct {
 	APIKeyConfigured       bool                      `json:"api_key_configured"`
 	Weight                 int                       `json:"weight"`
 	ProxyURLConfigured     bool                      `json:"proxy_url_configured"`
+	RawNames               bool                      `json:"raw_names"`
+	ManualAlias            bool                      `json:"manual_alias"`
+	SingleID               bool                      `json:"single_id"`
 	Headers                []directHeaderState       `json:"headers,omitempty"`
 	Models                 []directAccountModelState `json:"models,omitempty"`
 }
@@ -430,6 +433,9 @@ func directAccountReadView(account directAccount) directAccountView {
 		APIKeyConfigured:       account.APIKey != "",
 		Weight:                 account.Weight,
 		ProxyURLConfigured:     account.ProxyURL != "",
+		RawNames:               account.RawNames,
+		ManualAlias:            account.ManualAlias,
+		SingleID:               account.SingleID,
 		Headers:                headers,
 		Models:                 models,
 	}
