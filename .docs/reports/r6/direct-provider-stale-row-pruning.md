@@ -43,3 +43,16 @@ Antigravity account (prefix `antigravity`):
 - `TestDirectProviderUpsertPrunesUnavailableUpstreamNames`
 - `TestPrefixDirectModelAliasesMaterializesNamespacedUpstreamID`
 - `go vet ./...` + `go test ./...` clean.
+
+## v0.5.8 follow-up: namespace-rename collision
+
+First live "Scan & write models" on the renamed gpt2api failed validation:
+the stale `chatgpt-web/x` account rows still held the generated alias
+`chatgpt/x`, colliding with the new live `chatgpt/x` models.
+
+- `validateDirectAccounts` now skips `Unavailable` models — they are
+  historical records that never reach the provider model list.
+- `prefixDirectModelAliases` releases a stale row's alias when it collides
+  with a live model's alias or upstream id, so the console shows the dead
+  row by its true upstream id.
+- `TestScanUpsertSurvivesNamespaceRename` reproduces the exact failure.

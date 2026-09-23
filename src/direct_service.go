@@ -299,6 +299,27 @@ func prefixDirectModelAliases(prefix string, models []directAccountModel) []dire
 		}
 		out = append(out, model)
 	}
+	// An unavailable row's alias belongs to history: if it collides with a
+	// live model's alias or upstream id (namespace rename: stale
+	// "chatgpt-web/x" still holds the generated "chatgpt/x"), release it so
+	// the console shows the true upstream id for the dead row.
+	claimed := map[string]bool{}
+	for _, model := range out {
+		if model.Unavailable {
+			continue
+		}
+		if model.Alias != "" {
+			claimed[strings.ToLower(model.Alias)] = true
+		}
+		if model.UpstreamID != "" {
+			claimed[strings.ToLower(model.UpstreamID)] = true
+		}
+	}
+	for i := range out {
+		if out[i].Unavailable && out[i].Alias != "" && claimed[strings.ToLower(out[i].Alias)] {
+			out[i].Alias = ""
+		}
+	}
 	return normalizeDirectAccountModels(out)
 }
 
