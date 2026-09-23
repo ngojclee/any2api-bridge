@@ -49,3 +49,15 @@ Catalog: 285 models; no duplicate `devin/x` originals alongside aliases
   re-running the same request persisted `single_id: true` and restored the
   bare single-id provider rows. Flag state verified in config and via the
   accounts endpoint after the re-run.
+
+## Follow-up 2 (v0.5.20) — usage dashboard charts
+
+- Confirmed "Model usage share" / "Traffic by client" are functional: they
+  render passive usage records the bridge collects from upstream headers.
+- Token usage trend: new SVG stacked-bar chart (input/output/cache-read)
+  with dashed cache-hit-rate line on a 0-100% axis; no JS chart lib.
+- Model usage share: SVG donut + per-label stable hash colors (dot + bar).
+- formatUsageNumber: `1,569,159` separators; `>=1M` compacts to `10.5M`,
+  `>=1B` to `1.2B`; full value kept in `title` tooltips on metric cards.
+- Live-verified in owner browser: 8 donut segments, 22 bars, 15 rate dots,
+  metrics show `239` / `10.5M` / `1.6M / 41,235`.
