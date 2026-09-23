@@ -436,3 +436,42 @@ func TestPrefixDirectModelAliasesMaterializesNamespacedUpstreamID(t *testing.T) 
 		t.Fatalf("bare upstream id was not prefixed: %+v", models[1])
 	}
 }
+
+// Namespace rename scenario: the account still tracks chatgpt-web/* rows that
+// carried the generated chatgpt/* aliases. After rescan the live chatgpt/*
+// models claim those aliases, so the stale rows must release them and the
+// merged account must validate.
+func TestScanUpsertSurvivesNamespaceRename(t *testing.T) {
+	existing := []directAccountModel{
+		{UpstreamID: "chatgpt-web/gpt-5.5-high", Alias: "chatgpt/gpt-5.5-high", Enabled: true},
+		{UpstreamID: "chatgpt-web/gpt-5.5-instant", Alias: "chatgpt/gpt-5.5-instant", Enabled: true},
+	}
+	scanned := []modelSpec{
+		{Name: "chatgpt/gpt-5.5-high"},
+		{Name: "chatgpt/gpt-5.5-instant"},
+	}
+	merged := mergeDirectCatalogSpecs(scanned, existing, maxDirectModels)
+	prefixed := prefixDirectModelAliases("chatgpt", merged)
+	account := directAccount{
+		AccountID:    "chatgpt",
+		ProviderKind: directProviderGPT,
+		ChannelName:  "ChatGPT",
+		Prefix:       "chatgpt",
+		BaseURL:      "https://gpt.example/v1",
+		Enabled:      true,
+		Models:       prefixed,
+	}
+	if err := validateDirectAccounts([]directAccount{account}); err != nil {
+		t.Fatalf("namespace rename produced an invalid account: %v", err)
+	}
+	byID := map[string]directAccountModel{}
+	for _, m := range prefixed {
+		byID[m.UpstreamID] = m
+	}
+	if byID["chatgpt-web/gpt-5.5-high"].Alias != "" {
+		t.Fatalf("stale row kept a colliding alias: %+v", byID["chatgpt-web/gpt-5.5-high"])
+	}
+	if byID["chatgpt/gpt-5.5-high"].Alias != "chatgpt/gpt-5.5-high" {
+		t.Fatalf("live row lost its namespaced alias: %+v", byID["chatgpt/gpt-5.5-high"])
+	}
+}
