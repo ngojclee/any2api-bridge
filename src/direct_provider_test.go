@@ -683,6 +683,16 @@ openai-compatibility:
 	}
 }
 
+func TestDirectAccountReadViewExposesModelFlags(t *testing.T) {
+	view := directAccountReadView(directAccount{
+		AccountID: "agy", ChannelName: "Antigravity", Prefix: "antigravity",
+		RawNames: true, ManualAlias: true, SingleID: true,
+	})
+	if !view.RawNames || !view.ManualAlias || !view.SingleID {
+		t.Fatalf("read view dropped model flags: %+v", view)
+	}
+}
+
 func TestDirectFlagOverridesReadsJSONBody(t *testing.T) {
 	request := pluginapi.ManagementRequest{
 		Body: []byte(`{"account_id":"agy-prod","raw_names":"1","manual_alias":"0","single_id":"1"}`),
