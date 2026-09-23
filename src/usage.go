@@ -279,6 +279,12 @@ func usageTotalsFromUsageObject(raw map[string]any) (usageTotals, bool) {
 	if totals.OutputTokens == 0 {
 		totals.OutputTokens = totals.CompletionTokens
 	}
+	if totals.PromptTokens == 0 {
+		totals.PromptTokens = totals.InputTokens
+	}
+	if totals.CompletionTokens == 0 {
+		totals.CompletionTokens = totals.OutputTokens
+	}
 	if totals.TotalTokens == 0 && (totals.PromptTokens > 0 || totals.CompletionTokens > 0) {
 		totals.TotalTokens = totals.PromptTokens + totals.CompletionTokens
 	}
@@ -496,6 +502,8 @@ type usageBucket struct {
 	Requests         int64  `json:"requests"`
 	PromptTokens     int64  `json:"prompt_tokens"`
 	CompletionTokens int64  `json:"completion_tokens"`
+	InputTokens      int64  `json:"input_tokens"`
+	OutputTokens     int64  `json:"output_tokens"`
 	TotalTokens      int64  `json:"total_tokens"`
 	CachedTokens     int64  `json:"cached_tokens"`
 	CacheHits        int64  `json:"cache_hits"`
@@ -530,6 +538,12 @@ func usageDashboardData(diag providerDiagnostics, filter usageFilter) usagePageD
 	filtered := make([]usageRecord, 0, len(records))
 	periodFiltered := make([]usageRecord, 0, len(records))
 	for _, record := range records {
+		if record.PromptTokens == 0 {
+			record.PromptTokens = record.InputTokens
+		}
+		if record.CompletionTokens == 0 {
+			record.CompletionTokens = record.OutputTokens
+		}
 		if !recordMatchesUsagePeriod(record, filter) {
 			continue
 		}
@@ -664,6 +678,8 @@ func groupUsageBuckets(records []usageRecord, bucket string) []usageBucket {
 		item.Requests++
 		item.PromptTokens += record.PromptTokens
 		item.CompletionTokens += record.CompletionTokens
+		item.InputTokens += record.InputTokens
+		item.OutputTokens += record.OutputTokens
 		item.TotalTokens += record.TotalTokens
 		item.CachedTokens += record.CachedTokens
 		if record.CacheHit {
@@ -1038,8 +1054,15 @@ func renderUsageTrendChart(buckets []usageBucket) string {
 			fmt.Fprintf(&svg, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" class="bar %s"><title>%s — %s</title></rect>`,
 				x, y, barW, sh, cls, html.EscapeString(b.Label), formatUsageNumber(v))
 		}
-		seg(b.PromptTokens, "in")
-		seg(b.CompletionTokens, "out")
+		in, out := b.PromptTokens, b.CompletionTokens
+		if in == 0 {
+			in = b.InputTokens
+		}
+		if out == 0 {
+			out = b.OutputTokens
+		}
+		seg(in, "in")
+		seg(out, "out")
 		seg(b.CachedTokens, "cache")
 		rate := 0.0
 		if b.Requests > 0 {
