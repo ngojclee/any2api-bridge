@@ -291,6 +291,11 @@ func prefixDirectModelAliases(prefix string, models []directAccountModel) []dire
 		}
 		if base != "" && !strings.HasPrefix(strings.ToLower(base), prefix+"/") {
 			model.Alias = prefix + "/" + base
+		} else if model.Alias == "" && base != "" {
+			// Upstream id already carries the namespace (e.g. gpt2api serves
+			// "chatgpt/x"): materialize it so the console shows the effective
+			// client-facing alias instead of a blank column.
+			model.Alias = base
 		}
 		out = append(out, model)
 	}

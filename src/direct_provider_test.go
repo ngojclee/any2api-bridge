@@ -378,3 +378,61 @@ openai-compatibility:
 		t.Fatalf("new row alias was not stripped to bare: %+v", byName["gemini-3.7-flash"])
 	}
 }
+
+func TestDirectProviderUpsertPrunesUnavailableUpstreamNames(t *testing.T) {
+	raw := []byte(`
+openai-compatibility:
+  - name: ChatGPT
+    prefix: chatgpt
+    base-url: https://gpt.example/v1
+    models:
+      - name: chatgpt-web/gpt-5.5-high
+        alias: gpt-5.5-high
+      - name: manual-extra
+        alias: manual-extra
+`)
+	account := directAccount{
+		AccountID:   "chatgpt",
+		ChannelName: "ChatGPT",
+		Prefix:      "chatgpt",
+		BaseURL:     "https://gpt.example/v1",
+		Enabled:     true,
+		Models: []directAccountModel{
+			{UpstreamID: "chatgpt/gpt-5.5-high", Enabled: true},
+			{UpstreamID: "chatgpt-web/gpt-5.5-high", Enabled: true, Unavailable: true},
+		},
+	}
+	updated, _, errPatch := patchDirectProviderConfig(raw, account)
+	if errPatch != nil {
+		t.Fatal(errPatch)
+	}
+	root, _ := parseYAMLMap(updated)
+	models := compatModels(openAICompatEntries(root)[0])
+	byName := map[string]modelSpec{}
+	for _, m := range models {
+		byName[m.Name] = m
+	}
+	if _, found := byName["chatgpt-web/gpt-5.5-high"]; found {
+		t.Fatalf("stale upstream name was not pruned: %#v", models)
+	}
+	if _, found := byName["manual-extra"]; !found {
+		t.Fatalf("hand-added provider row was removed: %#v", models)
+	}
+	row := byName["chatgpt/gpt-5.5-high"]
+	if row.Name != "chatgpt/gpt-5.5-high" || row.Alias != "gpt-5.5-high" {
+		t.Fatalf("renamed upstream row was not written bare: %+v", row)
+	}
+}
+
+func TestPrefixDirectModelAliasesMaterializesNamespacedUpstreamID(t *testing.T) {
+	models := prefixDirectModelAliases("chatgpt", []directAccountModel{
+		{UpstreamID: "chatgpt/gpt-5.5-high", Enabled: true},
+		{UpstreamID: "gpt-4o-mini", Enabled: true},
+	})
+	if models[0].Alias != "chatgpt/gpt-5.5-high" {
+		t.Fatalf("namespaced upstream id was not materialized as alias: %+v", models[0])
+	}
+	if models[1].Alias != "chatgpt/gpt-4o-mini" {
+		t.Fatalf("bare upstream id was not prefixed: %+v", models[1])
+	}
+}
