@@ -327,3 +327,54 @@ func containsString(values []string, want string) bool {
 	}
 	return false
 }
+
+func TestDirectProviderAliasStripsAccountPrefix(t *testing.T) {
+	raw := []byte(`
+openai-compatibility:
+  - name: Antigravity
+    prefix: antigravity
+    base-url: https://agy.example/v1
+    api-key-entries:
+      - api-key: k
+    models:
+      - name: gemini-3.8-flash
+        alias: antigravity/gemini-3.8-flash
+      - name: claude-sonnet-4-6
+        alias: sonnet-fast
+`)
+	account := directAccount{
+		AccountID:   "agy-prod",
+		ChannelName: "Antigravity",
+		Prefix:      "antigravity",
+		BaseURL:     "https://agy.example/v1",
+		Enabled:     true,
+		Models: []directAccountModel{
+			{UpstreamID: "gemini-3.8-flash", Alias: "antigravity/gemini-3.8-flash", Enabled: true},
+			{UpstreamID: "claude-sonnet-4-6", Alias: "antigravity/claude-sonnet-4-6", Enabled: true},
+			{UpstreamID: "gemini-3.7-flash", Alias: "antigravity/gemini-3.7-flash", Enabled: true},
+		},
+	}
+	updated, _, errPatch := patchDirectProviderConfig(raw, account)
+	if errPatch != nil {
+		t.Fatal(errPatch)
+	}
+	root, _ := parseYAMLMap(updated)
+	models := compatModels(openAICompatEntries(root)[0])
+	byName := map[string]modelSpec{}
+	for _, m := range models {
+		byName[m.Name] = m
+	}
+	// A previously prefixed alias is healed back to the bare form so CPA's
+	// own prefix registration produces both "x" and "antigravity/x".
+	if byName["gemini-3.8-flash"].Alias != "gemini-3.8-flash" {
+		t.Fatalf("prefixed alias was not healed to bare: %+v", byName["gemini-3.8-flash"])
+	}
+	// A custom bare alias set by hand is preserved across syncs.
+	if byName["claude-sonnet-4-6"].Alias != "sonnet-fast" {
+		t.Fatalf("custom bare alias was not preserved: %+v", byName["claude-sonnet-4-6"])
+	}
+	// New rows get the bare form of the account alias as well.
+	if byName["gemini-3.7-flash"].Alias != "gemini-3.7-flash" {
+		t.Fatalf("new row alias was not stripped to bare: %+v", byName["gemini-3.7-flash"])
+	}
+}
