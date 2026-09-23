@@ -85,6 +85,16 @@ func handleDirectProviderScanUpsert(request pluginapi.ManagementRequest) ([]byte
 			"error":       errProbe.Error(),
 		}), nil
 	}
+	if len(scanned) == 0 {
+		// An empty 200 would mark every tracked model unavailable and prune
+		// the provider's rows; treat it as a scan failure instead.
+		return managementJSONResponse(http.StatusBadGateway, map[string]any{
+			"ok":          false,
+			"account_id":  account.AccountID,
+			"http_status": status,
+			"error":       "upstream returned an empty model list; provider config left unchanged",
+		}), nil
+	}
 	account.Models = mergeDirectCatalogSpecs(scanned, account.Models, maxDirectModels)
 	account.Models = prefixDirectModelAliases(account.Prefix, account.Models)
 	merged, _ := mergeDirectAccountByID(settings.DirectAccounts, account)
@@ -411,11 +421,25 @@ func mergeDirectProviderHeaders(provider map[string]any, account directAccount, 
 func mergeDirectProviderModels(provider map[string]any, account directAccount, changed *[]string) {
 	raw, _ := mapValue(provider, "models")
 	rawModels := asSlice(raw)
+	// Upstream ids the latest scan confirmed gone are pruned from the provider
+	// row (e.g. a namespace rename leaves dead "chatgpt-web/x" names behind).
+	// Only rows this account previously tracked are removed; rows the operator
+	// added by hand are left alone.
+	unavailable := map[string]bool{}
+	for _, model := range account.Models {
+		if model.Unavailable && strings.TrimSpace(model.UpstreamID) != "" {
+			unavailable[strings.ToLower(strings.TrimSpace(model.UpstreamID))] = true
+		}
+	}
 	rows := make([]any, 0, len(rawModels)+len(account.Models))
 	indexByName := map[string]int{}
 	for _, item := range rawModels {
 		row := asMap(item)
 		if row == nil {
+			continue
+		}
+		name, _ := stringValue(row, "name", "id")
+		if unavailable[strings.ToLower(strings.TrimSpace(name))] {
 			continue
 		}
 		clone := cloneAnyMap(row)
@@ -427,7 +451,7 @@ func mergeDirectProviderModels(provider map[string]any, account directAccount, c
 		}
 	}
 	for _, model := range normalizeDirectAccountModels(account.Models) {
-		if !model.Enabled || model.UpstreamID == "" {
+		if !model.Enabled || model.Unavailable || model.UpstreamID == "" {
 			continue
 		}
 		index, exists := indexByName[strings.ToLower(model.UpstreamID)]
