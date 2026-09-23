@@ -64,7 +64,7 @@ func handleDirectAccountScan(request pluginapi.ManagementRequest) ([]byte, error
 		}), nil
 	}
 	merged := mergeDirectCatalogSpecs(models, account.Models, maxDirectModels)
-	merged = prefixDirectModelAliases(account.Prefix, merged)
+	merged = effectiveDirectModelAliases(account, merged)
 	return managementJSONResponse(http.StatusOK, directScanResult{
 		OK:          status >= 200 && status < 300,
 		AccountID:   account.AccountID,
@@ -102,7 +102,7 @@ func handleDirectAccountSyncProviderModels(request pluginapi.ManagementRequest) 
 			active = append(active, model)
 		}
 	}
-	account.Models = prefixDirectModelAliases(account.Prefix, active)
+	account.Models = effectiveDirectModelAliases(account, active)
 	merged, replaced := mergeDirectAccountByID(settings.DirectAccounts, account)
 	if errValidate := validateDirectAccounts(merged); errValidate != nil {
 		return managementJSONResponse(http.StatusConflict, map[string]string{"error": errValidate.Error()}), nil
@@ -273,6 +273,26 @@ func directModelStates(models []directAccountModel) []directAccountModelState {
 			Thinking:         model.Thinking,
 			Unavailable:      model.Unavailable,
 		})
+	}
+	return out
+}
+
+// effectiveDirectModelAliases fills the cached model alias with the id
+// clients actually call. Single-id mode has no alias column at all, so the
+// cache records the provider wire name (the one catalog entry) instead of a
+// prefixed alias that no longer exists.
+func effectiveDirectModelAliases(account directAccount, models []directAccountModel) []directAccountModel {
+	if !account.SingleID {
+		return prefixDirectModelAliases(account.Prefix, models)
+	}
+	out := make([]directAccountModel, 0, len(models))
+	for _, model := range normalizeDirectAccountModels(models) {
+		if account.RawNames {
+			model.Alias = trimDirectAliasPrefix(account.Prefix, model.UpstreamID)
+		} else {
+			model.Alias = directProviderWireName(model.UpstreamID, account.Prefix)
+		}
+		out = append(out, model)
 	}
 	return out
 }
