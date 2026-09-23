@@ -614,6 +614,12 @@ openai-compatibility:
 	if models[0].Name != "antigravity/gemini-3.8-flash" || models[0].Alias != "" {
 		t.Fatalf("single_id did not drop the alias for one catalog id: %+v", models[0])
 	}
+	// The provider prefix must go too, or CPA registers a "prefix/<id>"
+	// clone and the catalog still shows two entries per model.
+	provider := openAICompatEntries(root)[0]
+	if _, hasPrefix := provider["prefix"]; hasPrefix {
+		t.Fatalf("single_id left provider prefix in place: %#v", provider)
+	}
 
 	// With raw_names the single visible id is the bare upstream id.
 	account.RawNames = true

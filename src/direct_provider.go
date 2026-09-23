@@ -388,7 +388,10 @@ func directAccountModelsForConfig(models []directAccountModel) []any {
 
 func applyDirectAccountToProvider(provider map[string]any, account directAccount, changed *[]string) {
 	account = normalizeDirectAccount(account)
-	if account.Prefix == "" {
+	// SingleID must also drop the provider prefix: CPA registers a
+	// "prefix/<id>" clone for every model while a prefix is set, so one
+	// catalog entry per model is impossible until the prefix is removed.
+	if account.Prefix == "" || account.SingleID {
 		deleteNormalized(provider, "prefix", changed)
 	} else {
 		setString(provider, "prefix", account.Prefix, changed)
