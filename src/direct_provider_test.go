@@ -581,3 +581,47 @@ openai-compatibility:
 		t.Fatalf("manual_alias still wrote an alias: %+v", newRow)
 	}
 }
+
+func TestDirectProviderSingleIDCollapsesAliasToName(t *testing.T) {
+	raw := []byte(`
+openai-compatibility:
+  - name: Antigravity
+    prefix: antigravity
+    base-url: https://agy.example/v1
+`)
+	account := directAccount{
+		AccountID:   "agy-prod",
+		ChannelName: "Antigravity",
+		Prefix:      "antigravity",
+		BaseURL:     "https://agy.example/v1",
+		Enabled:     true,
+		SingleID:    true,
+		Models: []directAccountModel{
+			{UpstreamID: "gemini-3.8-flash", Enabled: true},
+		},
+	}
+	updated, _, errPatch := patchDirectProviderConfig(raw, account)
+	if errPatch != nil {
+		t.Fatal(errPatch)
+	}
+	root, _ := parseYAMLMap(updated)
+	models := compatModels(openAICompatEntries(root)[0])
+	if len(models) != 1 {
+		t.Fatalf("expected one model row, got %#v", models)
+	}
+	if models[0].Name != "antigravity/gemini-3.8-flash" || models[0].Alias != "antigravity/gemini-3.8-flash" {
+		t.Fatalf("single_id did not collapse alias to the wire name: %+v", models[0])
+	}
+
+	// With raw_names the single visible id is the bare upstream id.
+	account.RawNames = true
+	updated, _, errPatch = patchDirectProviderConfig(raw, account)
+	if errPatch != nil {
+		t.Fatal(errPatch)
+	}
+	root, _ = parseYAMLMap(updated)
+	models = compatModels(openAICompatEntries(root)[0])
+	if models[0].Name != "gemini-3.8-flash" || models[0].Alias != "gemini-3.8-flash" {
+		t.Fatalf("single_id+raw_names row = %+v", models[0])
+	}
+}
