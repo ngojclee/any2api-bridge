@@ -439,7 +439,8 @@ func mergeDirectProviderModels(provider map[string]any, account directAccount, c
 			continue
 		}
 		name, _ := stringValue(row, "name", "id")
-		if unavailable[strings.ToLower(strings.TrimSpace(name))] {
+		if unavailable[strings.ToLower(strings.TrimSpace(name))] ||
+			unavailable[strings.ToLower(trimDirectAliasPrefix(account.Prefix, name))] {
 			continue
 		}
 		clone := cloneAnyMap(row)
@@ -447,6 +448,16 @@ func mergeDirectProviderModels(provider map[string]any, account directAccount, c
 		for _, key := range []string{"name", "id", "alias"} {
 			if value, ok := stringValue(clone, key); ok && value != "" {
 				indexByName[strings.ToLower(value)] = len(rows) - 1
+				if key != "alias" {
+					// A row written with a namespaced wire name
+					// ("antigravity/x") must still be found by the bare
+					// upstream id "x" on the next scan. Exact keys win:
+					// the stripped form only fills gaps.
+					bare := strings.ToLower(trimDirectAliasPrefix(account.Prefix, value))
+					if _, taken := indexByName[bare]; !taken {
+						indexByName[bare] = len(rows) - 1
+					}
+				}
 			}
 		}
 	}
@@ -484,7 +495,7 @@ func directAccountModelRow(model directAccountModel, prefix string) map[string]a
 // An existing prefixed alias (written before this rule) is healed back to
 // bare; a custom bare alias the operator set by hand is left alone.
 func mergeDirectAccountModelRow(row map[string]any, model directAccountModel, prefix string) {
-	row["name"] = model.UpstreamID
+	row["name"] = directProviderWireName(model.UpstreamID, prefix)
 	alias := strings.TrimSpace(model.Alias)
 	if alias == "" {
 		alias = strings.TrimSpace(model.UpstreamID)
@@ -509,6 +520,20 @@ func mergeDirectAccountModelRow(row map[string]any, model directAccountModel, pr
 	if model.Thinking != nil {
 		row["thinking"] = model.Thinking
 	}
+}
+
+// The provider row's "name" is the wire name CPA sends upstream. It always
+// carries the account namespace — "antigravity/x", "chatgpt/x" — so every
+// provider advertises a consistent "<backend>/<model>" left column regardless
+// of what the upstream /v1/models advertises (agy2api stays bare; gpt2api
+// already serves chatgpt/* natively). Upstreams accept the prefixed form.
+func directProviderWireName(upstreamID, prefix string) string {
+	id := strings.TrimSpace(upstreamID)
+	p := strings.Trim(strings.TrimSpace(prefix), "/")
+	if p == "" || id == "" || strings.HasPrefix(strings.ToLower(id), strings.ToLower(p)+"/") {
+		return id
+	}
+	return p + "/" + id
 }
 
 func trimDirectAliasPrefix(prefix, alias string) string {

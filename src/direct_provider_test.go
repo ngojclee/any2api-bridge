@@ -88,8 +88,9 @@ openai-compatibility:
 	if byName["gemini-3.1-pro"].Alias != "gemini-pro" {
 		t.Fatalf("existing alias was not preserved: %+v", byName["gemini-3.1-pro"])
 	}
-	if byName["gemini-3.8-flash"].Alias != "gemini-fast" || !byName["gemini-3.8-flash"].Image {
-		t.Fatalf("new model row was not merged: %+v", byName["gemini-3.8-flash"])
+	// Account-managed rows carry the namespaced wire name on "name".
+	if byName["agy/gemini-3.8-flash"].Alias != "gemini-fast" || !byName["agy/gemini-3.8-flash"].Image {
+		t.Fatalf("new model row was not merged: %+v", byName["agy/gemini-3.8-flash"])
 	}
 	if !containsString(changed, "api-key-entries") || !containsString(changed, "models") || !containsString(changed, "headers") {
 		t.Fatalf("changed fields = %#v", changed)
@@ -239,7 +240,7 @@ func TestDirectMultiAccountResolutionUsesSelectedAuthID(t *testing.T) {
 	}
 }
 
-func TestDirectProviderUpsertDoesNotApplyModelNamespacePrefixStripping(t *testing.T) {
+func TestDirectProviderUpsertWritesNamespacedWireNames(t *testing.T) {
 	raw := []byte(`
 openai-compatibility:
   - name: Antigravity
@@ -269,7 +270,10 @@ openai-compatibility:
 		t.Fatalf("prefix changed in direct provider mode: %q", prefix)
 	}
 	models := compatModels(provider)
-	if len(models) != 2 || models[0].Name != "gemini-3.1-pro" || models[1].Name != "gemini-3.8-flash" {
+	// Operator-added rows keep their hand-written name; account-managed rows
+	// get the namespaced wire name ("agy/x") so every provider's left column
+	// shows "<backend>/<model>".
+	if len(models) != 2 || models[0].Name != "gemini-3.1-pro" || models[1].Name != "agy/gemini-3.8-flash" {
 		t.Fatalf("direct provider model IDs were rewritten: %#v", models)
 	}
 	if _, found := findPluginConfig(root); found {
@@ -366,16 +370,16 @@ openai-compatibility:
 	}
 	// A previously prefixed alias is healed back to the bare form so CPA's
 	// own prefix registration produces both "x" and "antigravity/x".
-	if byName["gemini-3.8-flash"].Alias != "gemini-3.8-flash" {
-		t.Fatalf("prefixed alias was not healed to bare: %+v", byName["gemini-3.8-flash"])
+	if byName["antigravity/gemini-3.8-flash"].Alias != "gemini-3.8-flash" {
+		t.Fatalf("prefixed alias was not healed to bare: %+v", byName["antigravity/gemini-3.8-flash"])
 	}
 	// A custom bare alias set by hand is preserved across syncs.
-	if byName["claude-sonnet-4-6"].Alias != "sonnet-fast" {
-		t.Fatalf("custom bare alias was not preserved: %+v", byName["claude-sonnet-4-6"])
+	if byName["antigravity/claude-sonnet-4-6"].Alias != "sonnet-fast" {
+		t.Fatalf("custom bare alias was not preserved: %+v", byName["antigravity/claude-sonnet-4-6"])
 	}
 	// New rows get the bare form of the account alias as well.
-	if byName["gemini-3.7-flash"].Alias != "gemini-3.7-flash" {
-		t.Fatalf("new row alias was not stripped to bare: %+v", byName["gemini-3.7-flash"])
+	if byName["antigravity/gemini-3.7-flash"].Alias != "gemini-3.7-flash" {
+		t.Fatalf("new row alias was not stripped to bare: %+v", byName["antigravity/gemini-3.7-flash"])
 	}
 }
 
@@ -473,5 +477,56 @@ func TestScanUpsertSurvivesNamespaceRename(t *testing.T) {
 	}
 	if byID["chatgpt/gpt-5.5-high"].Alias != "chatgpt/gpt-5.5-high" {
 		t.Fatalf("live row lost its namespaced alias: %+v", byID["chatgpt/gpt-5.5-high"])
+	}
+}
+
+func TestDirectProviderRescanFindsRowsByNamespacedWireName(t *testing.T) {
+	raw := []byte(`
+openai-compatibility:
+  - name: Antigravity
+    prefix: antigravity
+    base-url: https://agy.example/v1
+    models:
+      - name: antigravity/gemini-3.8-flash
+        alias: gemini-3.8-flash
+      - name: antigravity/claude-opus-4-6
+        alias: claude-opus-4-6
+`)
+	account := directAccount{
+		AccountID:   "agy-prod",
+		ChannelName: "Antigravity",
+		Prefix:      "antigravity",
+		BaseURL:     "https://agy.example/v1",
+		Enabled:     true,
+		Models: []directAccountModel{
+			// Upstream advertises bare ids; the stored wire names are
+			// namespaced. A rescan must merge in place, not duplicate rows.
+			{UpstreamID: "gemini-3.8-flash", Alias: "antigravity/gemini-3.8-flash", Enabled: true},
+			// Dropped upstream: namespaced wire name must still prune.
+			{UpstreamID: "claude-opus-4-6", Alias: "antigravity/claude-opus-4-6", Enabled: true, Unavailable: true},
+			{UpstreamID: "gemini-3.7-flash", Alias: "antigravity/gemini-3.7-flash", Enabled: true},
+		},
+	}
+	updated, _, errPatch := patchDirectProviderConfig(raw, account)
+	if errPatch != nil {
+		t.Fatal(errPatch)
+	}
+	root, _ := parseYAMLMap(updated)
+	models := compatModels(openAICompatEntries(root)[0])
+	byName := map[string]modelSpec{}
+	for _, m := range models {
+		byName[m.Name] = m
+	}
+	if len(models) != 2 {
+		t.Fatalf("rescan duplicated or kept stale rows: %#v", models)
+	}
+	if byName["antigravity/gemini-3.8-flash"].Alias != "gemini-3.8-flash" {
+		t.Fatalf("namespaced row lost its bare alias: %+v", byName["antigravity/gemini-3.8-flash"])
+	}
+	if _, found := byName["antigravity/claude-opus-4-6"]; found {
+		t.Fatalf("unavailable namespaced row was not pruned: %+v", byName["antigravity/claude-opus-4-6"])
+	}
+	if byName["antigravity/gemini-3.7-flash"].Alias != "gemini-3.7-flash" {
+		t.Fatalf("new row missing namespaced name: %+v", byName["antigravity/gemini-3.7-flash"])
 	}
 }

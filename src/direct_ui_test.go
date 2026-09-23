@@ -171,7 +171,7 @@ openai-compatibility:
 		t.Fatalf("provider payload models = %#v", body.ProviderPayload["models"])
 	}
 	first := models[0].(map[string]any)
-	if first["name"] != "gemini-3.8-flash" || first["alias"] != "agy-fast" {
+	if first["name"] != "agy/gemini-3.8-flash" || first["alias"] != "agy-fast" {
 		t.Fatalf("selected model/alias not preserved: %#v", first)
 	}
 	configured, ok := body.ProviderPayloadConfigured["headers"].(map[string]any)
