@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -79,15 +80,7 @@ func handleDirectProviderScanUpsert(request pluginapi.ManagementRequest) ([]byte
 	// Console checkboxes ride along as explicit overrides; they persist onto
 	// the stored account through mergeDirectAccountByID + storeDirectSettings
 	// below, so the next scan starts from the same choice.
-	if value := firstRequestQueryValue(request, "raw_names", "raw-names"); value != "" {
-		account.RawNames = value == "1" || strings.EqualFold(value, "true")
-	}
-	if value := firstRequestQueryValue(request, "manual_alias", "manual-alias"); value != "" {
-		account.ManualAlias = value == "1" || strings.EqualFold(value, "true")
-	}
-	if value := firstRequestQueryValue(request, "single_id", "single-id"); value != "" {
-		account.SingleID = value == "1" || strings.EqualFold(value, "true")
-	}
+	directFlagOverrides(request, &account)
 	status, scanned, errProbe := scanDirectAccountModels(settings, account)
 	if errProbe != nil {
 		return managementJSONResponse(http.StatusBadGateway, map[string]any{
@@ -146,6 +139,44 @@ func handleDirectProviderScanUpsert(request pluginapi.ManagementRequest) ([]byte
 		ModelCount:      len(account.Models),
 		PreviewOnly:     false,
 	}), nil
+}
+
+// directFlagOverrides applies the model-flag checkboxes. The console posts
+// them inside the JSON body while management-API callers may carry them as
+// query values, so both channels are checked.
+func directFlagOverrides(request pluginapi.ManagementRequest, account *directAccount) {
+	value := func(keys ...string) string {
+		if query := firstRequestQueryValue(request, keys...); query != "" {
+			return query
+		}
+		var body map[string]any
+		if errUnmarshal := json.Unmarshal(request.Body, &body); errUnmarshal != nil || body == nil {
+			return ""
+		}
+		for _, key := range keys {
+			switch raw := body[key].(type) {
+			case string:
+				if trimmed := strings.TrimSpace(raw); trimmed != "" {
+					return trimmed
+				}
+			case bool:
+				if raw {
+					return "true"
+				}
+				return "false"
+			}
+		}
+		return ""
+	}
+	if flag := value("raw_names", "raw-names"); flag != "" {
+		account.RawNames = flag == "1" || strings.EqualFold(flag, "true")
+	}
+	if flag := value("manual_alias", "manual-alias"); flag != "" {
+		account.ManualAlias = flag == "1" || strings.EqualFold(flag, "true")
+	}
+	if flag := value("single_id", "single-id"); flag != "" {
+		account.SingleID = flag == "1" || strings.EqualFold(flag, "true")
+	}
 }
 
 func directProviderPreview(raw []byte, account directAccount) (map[string]any, []string, error) {
