@@ -625,3 +625,30 @@ openai-compatibility:
 		t.Fatalf("single_id+raw_names row = %+v", models[0])
 	}
 }
+
+func TestDirectAccountModelFlagsPersistThroughConfigProjection(t *testing.T) {
+	account := directAccount{
+		AccountID:   "agy-prod",
+		ChannelName: "Antigravity",
+		Prefix:      "antigravity",
+		Enabled:     true,
+		RawNames:    true,
+		ManualAlias: true,
+		SingleID:    true,
+	}
+	entries := directAccountsForConfig([]directAccount{account})
+	if len(entries) != 1 {
+		t.Fatalf("expected one projected entry, got %#v", entries)
+	}
+	entry, ok := entries[0].(map[string]any)
+	if !ok {
+		t.Fatalf("projected entry is not a map: %#v", entries[0])
+	}
+	if entry["raw_names"] != true || entry["manual_alias"] != true || entry["single_id"] != true {
+		t.Fatalf("model flags missing from config projection: %#v", entry)
+	}
+	parsed := directAccountFromMap(entry)
+	if !parsed.RawNames || !parsed.ManualAlias || !parsed.SingleID {
+		t.Fatalf("model flags did not round-trip: %+v", parsed)
+	}
+}
