@@ -24,6 +24,14 @@
    Rescan matching also falls back to the stripped upstream id so bare rows
    are not duplicated. Requires the upstream to accept bare ids (gpt2api
    v0.5.37+, agy2api already does).
+5. **Read-view drop (v0.5.17, the final "checkboxes still lose state"
+   report)**: flags persisted in `direct_accounts` correctly, but
+   `directAccountReadView` never copied them into `directAccountView`, so
+   `GET /direct/accounts` and the embedded console payload omitted them —
+   `account.raw_names` was `undefined` and chips rendered unchecked after
+   every reload. Verified live via the browser console: the embedded page
+   data now carries `"raw_names":true,"single_id":true` and the chips stay
+   checked across Scan & write reloads.
 
 ## Changes
 
@@ -44,10 +52,13 @@
 - v0.5.14: commit `06d0501` — `directFlagOverrides` reads the JSON body.
 - v0.5.15: commit `19f2109` — `single_id` deletes provider `prefix:`.
 - v0.5.16: commit `a65ab43` — `raw_names` strips the upstream namespace.
-- Deployed `any2api-bridge-v0.5.16.so` (0755), pinned `version: 0.5.16` +
-  `release-tag: v0.5.16`; `plugin loaded ... version=0.5.16`.
-- Live check: gpt2api v0.5.37 running (image created 13:14Z, container
-  13:15Z); bare `gpt-5.5-high` chat-completion → HTTP 200.
+- v0.5.17: commit `66b5873` — `directAccountReadView` exposes the flags.
+- Deployed `any2api-bridge-v0.5.17.so` (0755), pinned `version: 0.5.17` +
+  `release-tag: v0.5.17`; `plugin loaded ... version=0.5.17`.
+- Live check: gpt2api v0.5.37 running; bare `gpt-5.5-high` → HTTP 200.
+- Browser-verified: chatgpt Scan & write with ☑Raw names ☑Single ID →
+  provider rows `{name: gpt-5.5-high, ...}` no alias, no `prefix:`;
+  checkboxes remain checked after the reload.
 
 ## Behavior
 
