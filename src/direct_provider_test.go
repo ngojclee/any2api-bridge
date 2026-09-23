@@ -443,6 +443,30 @@ func TestPrefixDirectModelAliasesMaterializesNamespacedUpstreamID(t *testing.T) 
 	}
 }
 
+func TestEffectiveDirectModelAliasesSingleID(t *testing.T) {
+	account := directAccount{Prefix: "chatgpt", SingleID: true, RawNames: true}
+	models := effectiveDirectModelAliases(account, []directAccountModel{
+		{UpstreamID: "chatgpt/gpt-5.5-high", Enabled: true},
+		{UpstreamID: "gpt-4o-mini", Enabled: true},
+	})
+	// Single-id has no alias column: the cache must show the effective
+	// catalog id (bare slug under RawNames), not a dead prefixed alias.
+	if models[0].Alias != "gpt-5.5-high" {
+		t.Fatalf("single-id raw alias not stripped to bare slug: %+v", models[0])
+	}
+	if models[1].Alias != "gpt-4o-mini" {
+		t.Fatalf("single-id raw alias mismatch: %+v", models[1])
+	}
+
+	account.RawNames = false
+	models = effectiveDirectModelAliases(account, []directAccountModel{
+		{UpstreamID: "gpt-4o-mini", Enabled: true},
+	})
+	if models[0].Alias != "chatgpt/gpt-4o-mini" {
+		t.Fatalf("single-id prefixed alias should equal wire name: %+v", models[0])
+	}
+}
+
 // Namespace rename scenario: the account still tracks chatgpt-web/* rows that
 // carried the generated chatgpt/* aliases. After rescan the live chatgpt/*
 // models claim those aliases, so the stale rows must release them and the
