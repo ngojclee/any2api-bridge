@@ -52,3 +52,25 @@ back to bare; custom bare aliases are preserved.
 Re-run "Scan & write models" on the `antigravity` account: provider rows gain
 `name: antigravity/<id>` while aliases stay bare. The `chatgpt` account is
 already consistent (upstream ids are natively `chatgpt/*`).
+
+## Follow-up: raw_names + manual_alias opt-outs (v0.5.10)
+
+Per-account flags on `directAccount`, exposed as two checkboxes in the
+Models tab and sent with "Scan & write models". Both persist onto the
+stored account through the existing mergeDirectAccountByID +
+storeDirectSettings path, so the next scan reuses the choice.
+
+- `raw_names`: row `name` stays at the upstream id — for operators who
+  want the left column untouched.
+- `manual_alias`: the plugin never writes row `alias`; existing operator
+  aliases are preserved verbatim and new rows get none — the right
+  column is fully hand-managed.
+
+`handleDirectProviderScanUpsert` reads `raw_names`/`manual_alias` from
+the request (explicit "1"/"true"/"0"/"false"); absent params keep the
+stored flags.
+
+Test: `TestDirectProviderRescanFindsRowsByNamespacedWireName` (v0.5.9),
+`TestDirectProviderRawNamesAndManualAliasOptOut` (v0.5.10). v0.5.10
+deployed: `.so` installed, version pinned, `plugin loaded
+version=0.5.10` confirmed.
