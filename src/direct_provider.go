@@ -513,7 +513,10 @@ func mergeDirectAccountModelRow(row map[string]any, model directAccountModel, ac
 		row["name"] = directProviderWireName(model.UpstreamID, account.Prefix)
 	}
 	if account.SingleID {
-		row["alias"] = row["name"]
+		// alias=name would leave a "prefix/name" clone behind on providers
+		// that set the prefix field (chatgpt/chatgpt/x). Deleting the alias
+		// registers exactly one catalog id: the wire name.
+		delete(row, "alias")
 	} else if !account.ManualAlias {
 		alias := strings.TrimSpace(model.Alias)
 		if alias == "" {
