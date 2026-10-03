@@ -40,6 +40,7 @@ func handleManagementRegister() []byte {
 			{Method: http.MethodPost, Path: managementBasePath + "/direct/accounts/upsert"},
 			{Method: http.MethodPost, Path: managementBasePath + "/direct/accounts/add"},
 			{Method: http.MethodPost, Path: managementBasePath + "/direct/accounts/remove"},
+			{Method: http.MethodPost, Path: managementBasePath + "/direct/accounts/models/remove"},
 			{Method: http.MethodPost, Path: managementBasePath + "/direct/mode"},
 			{Method: http.MethodGet, Path: managementBasePath + "/direct/providers/import"},
 			{Method: http.MethodPost, Path: managementBasePath + "/direct/providers/import"},
@@ -135,6 +136,8 @@ func handleManagement(raw []byte) ([]byte, error) {
 		return handleDirectAccountAdd(request)
 	case request.Method == http.MethodPost && path == "/direct/accounts/remove":
 		return handleDirectAccountRemove(request)
+	case request.Method == http.MethodPost && path == "/direct/accounts/models/remove":
+		return handleDirectAccountModelRemove(request)
 	case request.Method == http.MethodPost && path == "/direct/mode":
 		return handleDirectModeSet(request)
 	case request.Method == http.MethodGet && path == "/direct/providers/import":
@@ -1741,6 +1744,7 @@ func patchProviderConfig(raw []byte, payload providerEditorPayload, settings Plu
 		}
 		if len(apiEntries) > 0 {
 			setAny(provider, "api-key-entries", apiEntries, &changed)
+			delete(provider, "keys")
 		}
 	} else if len(payload.APIKeys) > 0 {
 		apiEntries := make([]any, 0, len(payload.APIKeys))
@@ -1748,6 +1752,7 @@ func patchProviderConfig(raw []byte, payload providerEditorPayload, settings Plu
 			apiEntries = append(apiEntries, map[string]any{"api-key": key})
 		}
 		setAny(provider, "api-key-entries", apiEntries, &changed)
+		delete(provider, "keys")
 	}
 	if len(payload.Models) > 0 {
 		setAny(provider, "models", modelsForEditorPayload(payload.Models, compatModels(provider)), &changed)
@@ -1814,17 +1819,44 @@ func findEditableProviderIndex(entries []map[string]any, payload providerEditorP
 }
 
 func replaceOpenAICompatEntry(root map[string]any, index int, provider map[string]any) error {
-	raw, ok := mapValue(root, "openai-compatibility", "openai_compatibility")
-	if !ok {
+	container, entries, nested := openAICompatSection(root)
+	if len(entries) == 0 {
 		return fmt.Errorf("openai-compatibility providers were not found")
 	}
-	entries := asSlice(raw)
 	if index < 0 || index >= len(entries) {
 		return fmt.Errorf("provider index is out of range")
 	}
-	entries[index] = provider
-	setAny(root, "openai-compatibility", entries, nil)
+	entries[index] = normalizeProviderKeyField(provider, nested)
+	setAny(container, "openai-compatibility", entries, nil)
 	return nil
+}
+
+// normalizeProviderKeyField rewrites the credential list to the field name
+// its section expects. CPA v8 api-keys groups carry "keys"; the legacy
+// top-level openai-compatibility layout uses "api-key-entries". Emitting the
+// wrong name makes the strict decoder reject the whole file, so rows written
+// into a v8 section are migrated in place. Callers that update credentials
+// always write "api-key-entries" and drop "keys" first, so when both names
+// survive (hand-edited rows) the legacy list is treated as the fresher one.
+func normalizeProviderKeyField(provider map[string]any, nested bool) map[string]any {
+	if provider == nil {
+		return provider
+	}
+	delete(provider, "api_key_entries")
+	if nested {
+		if raw, ok := provider["api-key-entries"]; ok {
+			provider["keys"] = raw
+			delete(provider, "api-key-entries")
+		}
+		return provider
+	}
+	if raw, ok := provider["keys"]; ok {
+		if _, exists := provider["api-key-entries"]; !exists {
+			provider["api-key-entries"] = raw
+		}
+		delete(provider, "keys")
+	}
+	return provider
 }
 
 func ensurePluginConfig(root map[string]any) map[string]any {

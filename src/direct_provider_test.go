@@ -41,7 +41,7 @@ openai-compatibility:
 		weightSet:   true,
 		prioritySet: true,
 	}
-	updated, changed, errPatch := patchDirectProviderConfig(raw, account)
+	updated, changed, errPatch := patchDirectProviderConfig(raw, account, nil)
 	if errPatch != nil {
 		t.Fatal(errPatch)
 	}
@@ -123,7 +123,7 @@ openai-compatibility:
 		ProxyURL:     "http://proxy.example:8080",
 		weightSet:    true,
 	}
-	updated, _, errPatch := patchDirectProviderConfig(raw, account)
+	updated, _, errPatch := patchDirectProviderConfig(raw, account, nil)
 	if errPatch != nil {
 		t.Fatal(errPatch)
 	}
@@ -262,7 +262,7 @@ openai-compatibility:
 			{UpstreamID: "gemini-3.8-flash", Enabled: true},
 		},
 	}
-	updated, _, errPatch := patchDirectProviderConfig(raw, account)
+	updated, _, errPatch := patchDirectProviderConfig(raw, account, nil)
 	if errPatch != nil {
 		t.Fatal(errPatch)
 	}
@@ -297,7 +297,7 @@ openai-compatibility:
 		BaseURL:      "https://agy.example/v1",
 		Enabled:      true,
 	}
-	updated, changed, errPatch := patchDirectProviderConfig(raw, account)
+	updated, changed, errPatch := patchDirectProviderConfig(raw, account, nil)
 	if errPatch != nil {
 		t.Fatal(errPatch)
 	}
@@ -311,7 +311,7 @@ openai-compatibility:
 	}
 
 	account.Prefix = ""
-	updated, changed, errPatch = patchDirectProviderConfig(updated, account)
+	updated, changed, errPatch = patchDirectProviderConfig(updated, account, nil)
 	if errPatch != nil {
 		t.Fatal(errPatch)
 	}
@@ -360,7 +360,7 @@ openai-compatibility:
 			{UpstreamID: "gemini-3.7-flash", Alias: "antigravity/gemini-3.7-flash", Enabled: true},
 		},
 	}
-	updated, _, errPatch := patchDirectProviderConfig(raw, account)
+	updated, _, errPatch := patchDirectProviderConfig(raw, account, nil)
 	if errPatch != nil {
 		t.Fatal(errPatch)
 	}
@@ -408,7 +408,7 @@ openai-compatibility:
 			{UpstreamID: "chatgpt-web/gpt-5.5-high", Enabled: true, Unavailable: true},
 		},
 	}
-	updated, _, errPatch := patchDirectProviderConfig(raw, account)
+	updated, _, errPatch := patchDirectProviderConfig(raw, account, nil)
 	if errPatch != nil {
 		t.Fatal(errPatch)
 	}
@@ -533,7 +533,7 @@ openai-compatibility:
 			{UpstreamID: "gemini-3.7-flash", Alias: "antigravity/gemini-3.7-flash", Enabled: true},
 		},
 	}
-	updated, _, errPatch := patchDirectProviderConfig(raw, account)
+	updated, _, errPatch := patchDirectProviderConfig(raw, account, nil)
 	if errPatch != nil {
 		t.Fatal(errPatch)
 	}
@@ -580,7 +580,7 @@ openai-compatibility:
 			{UpstreamID: "gemini-3.7-flash", Alias: "antigravity/gemini-3.7-flash", Enabled: true},
 		},
 	}
-	updated, _, errPatch := patchDirectProviderConfig(raw, account)
+	updated, _, errPatch := patchDirectProviderConfig(raw, account, nil)
 	if errPatch != nil {
 		t.Fatal(errPatch)
 	}
@@ -626,7 +626,7 @@ openai-compatibility:
 			{UpstreamID: "gemini-3.8-flash", Enabled: true},
 		},
 	}
-	updated, _, errPatch := patchDirectProviderConfig(raw, account)
+	updated, _, errPatch := patchDirectProviderConfig(raw, account, nil)
 	if errPatch != nil {
 		t.Fatal(errPatch)
 	}
@@ -647,7 +647,7 @@ openai-compatibility:
 
 	// With raw_names the single visible id is the bare upstream id.
 	account.RawNames = true
-	updated, _, errPatch = patchDirectProviderConfig(raw, account)
+	updated, _, errPatch = patchDirectProviderConfig(raw, account, nil)
 	if errPatch != nil {
 		t.Fatal(errPatch)
 	}
@@ -679,7 +679,7 @@ openai-compatibility:
 			{UpstreamID: "chatgpt/gpt-5.5-high", Enabled: true},
 		},
 	}
-	updated, _, errPatch := patchDirectProviderConfig(raw, account)
+	updated, _, errPatch := patchDirectProviderConfig(raw, account, nil)
 	if errPatch != nil {
 		t.Fatal(errPatch)
 	}
@@ -696,7 +696,7 @@ openai-compatibility:
 	}
 	// Rescan must match the bare row by the stripped upstream id, not
 	// append a duplicate.
-	updated, _, errPatch = patchDirectProviderConfig(updated, account)
+	updated, _, errPatch = patchDirectProviderConfig(updated, account, nil)
 	if errPatch != nil {
 		t.Fatal(errPatch)
 	}

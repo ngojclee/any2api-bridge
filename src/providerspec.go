@@ -82,18 +82,50 @@ func cachedProviderSpec() (providerSpec, bool) {
 	return providerSpecCache.spec, providerSpecCache.found
 }
 
+// openAICompatSection locates the provider list and returns its container.
+// CPA v8 groups credential providers under the api-keys root
+// (api-keys.openai-compatibility) while older layouts keep the list at the
+// root. The v8 section wins when both exist, matching CPA's "a present new
+// field wins over its legacy equivalent" rule. nested reports whether the
+// container is the api-keys group — writers must emit v8 field names there.
+func openAICompatSection(root map[string]any) (container map[string]any, items []any, nested bool) {
+	for _, groupKey := range []string{"api-keys", "api_keys"} {
+		group, ok := mapValue(root, groupKey)
+		if !ok {
+			continue
+		}
+		groupMap := asMap(group)
+		if groupMap == nil {
+			continue
+		}
+		raw, exists := mapValue(groupMap, "openai-compatibility", "openai_compatibility")
+		if !exists {
+			continue
+		}
+		if list := asSlice(raw); len(list) > 0 {
+			return groupMap, list, true
+		}
+		// An empty v8 list still claims the section over a missing legacy one.
+		if _, legacy := mapValue(root, "openai-compatibility", "openai_compatibility"); !legacy {
+			return groupMap, nil, true
+		}
+	}
+	raw, exists := mapValue(root, "openai-compatibility", "openai_compatibility")
+	if !exists {
+		return root, nil, false
+	}
+	return root, asSlice(raw), false
+}
+
 // openAICompatEntries returns the raw provider maps so both discovery and the
 // executor can read the same records without parsing twice.
 func openAICompatEntries(root map[string]any) []map[string]any {
 	if root == nil {
 		return nil
 	}
-	raw, ok := mapValue(root, "openai-compatibility", "openai_compatibility")
-	if !ok {
-		return nil
-	}
+	_, items, _ := openAICompatSection(root)
 	entries := make([]map[string]any, 0)
-	for _, item := range asSlice(raw) {
+	for _, item := range items {
 		if providerMap := asMap(item); providerMap != nil {
 			entries = append(entries, providerMap)
 		}
@@ -103,7 +135,7 @@ func openAICompatEntries(root map[string]any) []map[string]any {
 
 func compatAPIKeys(providerMap map[string]any) []string {
 	apiKeys := make([]string, 0)
-	rawKeys, exists := mapValue(providerMap, "api-key-entries", "api_key_entries")
+	rawKeys, exists := mapValue(providerMap, "api-key-entries", "api_key_entries", "keys")
 	if !exists {
 		return apiKeys
 	}

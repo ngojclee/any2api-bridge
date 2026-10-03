@@ -40,7 +40,7 @@ func handleDirectProviderUpsert(request pluginapi.ManagementRequest) ([]byte, er
 	if !snapshot.ConfigPathFound || strings.TrimSpace(snapshot.ConfigPath) == "" {
 		return managementJSONResponse(http.StatusConflict, map[string]string{"error": "mounted CPA config path was not found"}), nil
 	}
-	updated, changed, errPatch := patchDirectProviderConfig(snapshot.ConfigYAML, account)
+	updated, changed, errPatch := patchDirectProviderConfig(snapshot.ConfigYAML, account, nil)
 	if errPatch != nil {
 		return managementJSONResponse(http.StatusBadRequest, map[string]string{"error": errPatch.Error()}), nil
 	}
@@ -113,7 +113,7 @@ func handleDirectProviderScanUpsert(request pluginapi.ManagementRequest) ([]byte
 	if !snapshot.ConfigPathFound || strings.TrimSpace(snapshot.ConfigPath) == "" {
 		return managementJSONResponse(http.StatusConflict, map[string]string{"error": "mounted CPA config path was not found"}), nil
 	}
-	updated, changed, errPatch := patchDirectProviderConfig(snapshot.ConfigYAML, account)
+	updated, changed, errPatch := patchDirectProviderConfig(snapshot.ConfigYAML, account, nil)
 	if errPatch != nil {
 		return managementJSONResponse(http.StatusBadRequest, map[string]string{"error": errPatch.Error()}), nil
 	}
@@ -201,7 +201,7 @@ func directProviderPreview(raw []byte, account directAccount) (map[string]any, [
 	return provider, uniqueStrings(changed), nil
 }
 
-func patchDirectProviderConfig(raw []byte, account directAccount) ([]byte, []string, error) {
+func patchDirectProviderConfig(raw []byte, account directAccount, pruneIDs []string) ([]byte, []string, error) {
 	root, errParse := parseYAMLMap(raw)
 	if errParse != nil {
 		return nil, nil, fmt.Errorf("parse CPA config: %w", errParse)
@@ -220,6 +220,12 @@ func patchDirectProviderConfig(raw []byte, account directAccount) ([]byte, []str
 	provider := entries[index]
 	changed := make([]string, 0, 4)
 	applyDirectAccountToProvider(provider, account, &changed)
+	// Explicit deletes carry the dropped upstream ids so their provider rows
+	// are removed too; account.Models no longer tracks them, which is exactly
+	// what keeps mergeDirectProviderModels from touching the row by itself.
+	if pruneDirectProviderModelRows(provider, account.Prefix, pruneIDs) {
+		changed = append(changed, "models")
+	}
 	if errUpdate := replaceOpenAICompatEntry(root, index, provider); errUpdate != nil {
 		return nil, nil, errUpdate
 	}
@@ -413,7 +419,7 @@ func applyDirectAccountToProvider(provider map[string]any, account directAccount
 func mergeDirectProviderAPIKeys(provider map[string]any, account directAccount, changed *[]string) {
 	entries := make([]any, 0)
 	updatedExisting := false
-	if raw, ok := mapValue(provider, "api-key-entries", "api_key_entries"); ok {
+	if raw, ok := mapValue(provider, "api-key-entries", "api_key_entries", "keys"); ok {
 		for _, item := range asSlice(raw) {
 			if itemMap := asMap(item); itemMap != nil {
 				clone := cloneAnyMap(itemMap)
@@ -454,6 +460,10 @@ func mergeDirectProviderAPIKeys(provider map[string]any, account directAccount, 
 	}
 	if len(entries) > 0 && (!updatedExisting || account.weightSet || account.ProxyURL != "") {
 		setAny(provider, "api-key-entries", entries, changed)
+		// Drop the v8 spelling so it cannot shadow the merged list when the
+		// row is written back; replaceOpenAICompatEntry re-emits whichever
+		// field name the section expects.
+		delete(provider, "keys")
 	}
 }
 
@@ -550,6 +560,52 @@ func mergeDirectProviderModels(provider map[string]any, account directAccount, c
 	}
 }
 
+// pruneDirectProviderModelRows drops provider model rows whose name, bare
+// (prefix-stripped) name, or alias matches one of ids. Used by explicit model
+// deletes where the row is no longer tracked by the account and the regular
+// merge would otherwise leave it in place. Reports whether rows changed.
+func pruneDirectProviderModelRows(provider map[string]any, prefix string, ids []string) bool {
+	if len(ids) == 0 {
+		return false
+	}
+	want := map[string]bool{}
+	for _, id := range ids {
+		if trimmed := strings.ToLower(strings.TrimSpace(id)); trimmed != "" {
+			want[trimmed] = true
+		}
+	}
+	if len(want) == 0 {
+		return false
+	}
+	raw, ok := mapValue(provider, "models")
+	if !ok {
+		return false
+	}
+	kept := make([]any, 0)
+	removed := false
+	for _, item := range asSlice(raw) {
+		row := asMap(item)
+		name, _ := stringValue(row, "name", "id")
+		alias, _ := stringValue(row, "alias")
+		if want[strings.ToLower(strings.TrimSpace(name))] ||
+			want[strings.ToLower(trimDirectAliasPrefix(prefix, name))] ||
+			(alias != "" && want[strings.ToLower(strings.TrimSpace(alias))]) {
+			removed = true
+			continue
+		}
+		kept = append(kept, item)
+	}
+	if !removed {
+		return false
+	}
+	if len(kept) == 0 {
+		delete(provider, "models")
+	} else {
+		provider["models"] = kept
+	}
+	return true
+}
+
 func directAccountModelRow(model directAccountModel, account directAccount) map[string]any {
 	row := map[string]any{"name": model.UpstreamID}
 	mergeDirectAccountModelRow(row, model, account)
@@ -632,7 +688,7 @@ func findDirectProviderIndex(entries []map[string]any, account directAccount) in
 		if account.ChannelName != "" && !strings.EqualFold(strings.TrimSpace(name), account.ChannelName) {
 			continue
 		}
-		if account.BaseURL != "" && strings.TrimRight(strings.TrimSpace(baseURL), "/") != account.BaseURL {
+		if account.BaseURL != "" && strings.TrimRight(strings.TrimSpace(baseURL), "/") != strings.TrimRight(strings.TrimSpace(account.BaseURL), "/") {
 			continue
 		}
 		// Prefix is mutable account metadata, not an identity key. Only use it
@@ -651,6 +707,8 @@ func findDirectProviderIndex(entries []map[string]any, account directAccount) in
 func redactDirectProviderPayload(payload map[string]any) map[string]any {
 	out := cloneAnyMap(payload)
 	delete(out, "api-key-entries")
+	delete(out, "api_key_entries")
+	delete(out, "keys")
 	if headers, ok := mapValue(out, "headers"); ok {
 		headerMap := asMap(headers)
 		redacted := make(map[string]any, len(headerMap))
