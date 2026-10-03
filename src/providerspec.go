@@ -34,12 +34,16 @@ type modelSpec struct {
 	Thinking         *thinkingSpec
 }
 
+// thinkingSpec carries yaml tags because it is written into CPA config maps
+// and marshaled with yaml.v3: without tags the encoder lowercases the Go
+// field names ("zeroallowed"), which CPA's strict ThinkingSupport decoder
+// rejects — the config schema uses kebab-case keys.
 type thinkingSpec struct {
-	Min            int      `json:"Min"`
-	Max            int      `json:"Max"`
-	ZeroAllowed    bool     `json:"ZeroAllowed"`
-	DynamicAllowed bool     `json:"DynamicAllowed"`
-	Levels         []string `json:"Levels"`
+	Min            int      `json:"Min" yaml:"min"`
+	Max            int      `json:"Max" yaml:"max"`
+	ZeroAllowed    bool     `json:"ZeroAllowed" yaml:"zero-allowed"`
+	DynamicAllowed bool     `json:"DynamicAllowed" yaml:"dynamic-allowed"`
+	Levels         []string `json:"Levels" yaml:"levels"`
 }
 
 // modelInfo mirrors pluginapi.ModelInfo field names. The host decodes this
@@ -161,8 +165,8 @@ func compatModels(providerMap map[string]any) []modelSpec {
 				thinking := &thinkingSpec{}
 				thinking.Min, _ = intValue(thinkingMap, "min")
 				thinking.Max, _ = intValue(thinkingMap, "max")
-				thinking.ZeroAllowed, _ = boolValue(thinkingMap, "zero-allowed", "zero_allowed")
-				thinking.DynamicAllowed, _ = boolValue(thinkingMap, "dynamic-allowed", "dynamic_allowed")
+				thinking.ZeroAllowed, _ = boolValue(thinkingMap, "zero-allowed", "zero_allowed", "zeroallowed")
+				thinking.DynamicAllowed, _ = boolValue(thinkingMap, "dynamic-allowed", "dynamic_allowed", "dynamicallowed")
 				thinking.Levels, _ = stringSliceValue(thinkingMap, "levels")
 				spec.Thinking = thinking
 			}

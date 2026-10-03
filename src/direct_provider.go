@@ -177,6 +177,9 @@ func directFlagOverrides(request pluginapi.ManagementRequest, account *directAcc
 	if flag := value("single_id", "single-id"); flag != "" {
 		account.SingleID = flag == "1" || strings.EqualFold(flag, "true")
 	}
+	if flag := value("include_variants", "include-variants"); flag != "" {
+		account.IncludeVariants = flag == "1" || strings.EqualFold(flag, "true")
+	}
 }
 
 func directProviderPreview(raw []byte, account directAccount) (map[string]any, []string, error) {
@@ -322,6 +325,9 @@ func directAccountsForConfig(accounts []directAccount) []any {
 		}
 		if account.SingleID {
 			entry["single_id"] = true
+		}
+		if account.IncludeVariants {
+			entry["include_variants"] = true
 		}
 		if account.Label != "" {
 			entry["label"] = account.Label

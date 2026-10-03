@@ -1249,7 +1249,7 @@ func handleProviderFetchModels(request pluginapi.ManagementRequest) ([]byte, err
 		return managementJSONResponse(http.StatusBadRequest, map[string]any{"ok": false, "error": errParse.Error()}), nil
 	}
 	spec := editorProviderSpec(payload)
-	status, modelSpecs, errProbe := probeProviderModelSpecs(spec)
+	status, modelSpecs, errProbe := probeProviderModelSpecs(spec, "")
 	if errProbe != nil {
 		return managementJSONResponse(http.StatusBadGateway, map[string]any{"ok": false, "error": errProbe.Error()}), nil
 	}
@@ -1520,11 +1520,22 @@ func editorModelIsImage(models []modelSpec, model string) bool {
 }
 
 func probeProviderModels(spec providerSpec) (int, []string, error) {
-	status, models, errProbe := probeProviderModelSpecs(spec)
+	status, models, errProbe := probeProviderModelSpecs(spec, "")
 	return status, modelIDsFromSpecs(models), errProbe
 }
 
-func probeProviderModelSpecs(spec providerSpec) (int, []modelSpec, error) {
+// probeModelsURL builds the upstream /models URL. The query is appended to
+// the wire URL only — the identity signature keeps signing the bare "/models"
+// path, which is what upstream verifiers check.
+func probeModelsURL(spec providerSpec, query string) string {
+	url := spec.upstreamBaseURL() + "/models"
+	if query = strings.TrimSpace(query); query != "" {
+		url += "?" + query
+	}
+	return url
+}
+
+func probeProviderModelSpecs(spec providerSpec, query string) (int, []modelSpec, error) {
 	if spec.upstreamBaseURL() == "" {
 		return 0, nil, fmt.Errorf("base URL is required")
 	}
@@ -1552,7 +1563,7 @@ func probeProviderModelSpecs(spec providerSpec) (int, []modelSpec, error) {
 	}
 	request := hostHTTPRequest{
 		Method:  "GET",
-		URL:     spec.upstreamBaseURL() + "/models",
+		URL:     probeModelsURL(spec, query),
 		Headers: headers,
 	}
 	raw, errCall := hostCall(pluginabi.MethodHostHTTPDo, request.marshal())

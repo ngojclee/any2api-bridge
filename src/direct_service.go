@@ -53,6 +53,10 @@ func handleDirectAccountScan(request pluginapi.ManagementRequest) ([]byte, error
 	if !found {
 		return managementJSONResponse(http.StatusNotFound, map[string]string{"error": "direct account not found"}), nil
 	}
+	// Preview honors the same console checkboxes as scan/upsert so the
+	// operator sees exactly what a write would produce; unlike upsert this
+	// override is not persisted.
+	directFlagOverrides(request, &account)
 	status, models, errProbe := scanDirectAccountModels(settings, account)
 	if errProbe != nil {
 		return managementJSONResponse(http.StatusBadGateway, directScanResult{
@@ -201,7 +205,14 @@ func scanDirectAccountModels(settings PluginSettings, account directAccount) (in
 		Headers: account.StaticHeaders,
 		Models:  directAccountModelSpecs(account),
 	}
-	return probeProviderModelSpecs(spec)
+	// agy2api-style upstreams collapse effort variants into family ids unless
+	// asked otherwise; the flag is opt-in per account. The signed path stays
+	// "/models" — upstream signature verification covers the path only.
+	query := ""
+	if account.IncludeVariants {
+		query = "include_variants=1"
+	}
+	return probeProviderModelSpecs(spec, query)
 }
 
 func mergeDirectCatalogSpecs(models []modelSpec, existing []directAccountModel, limit int) []directAccountModel {
