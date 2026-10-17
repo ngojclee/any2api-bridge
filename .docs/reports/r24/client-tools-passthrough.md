@@ -43,20 +43,30 @@ emits each SSE event's raw `data:` payload through `host.stream.emit`;
 
 `go vet ./src` clean, `go test ./src` all green.
 
-## CPA-side verdict: unproven — no live lane to test
+## CPA-side verdict: verified live — `Payload` keeps the full contract
 
-The handoff's open item ("does CPA's translated `Payload` keep these
-fields") needs a live CPA→agy2api request. On the target host
-(10.21.1.101:8317) the `openai-compatibility` provider for agy2api
-(`http://10.21.4.101:8123/v1`) is `disabled: true`, and no
-`ln.Antigravity`/`any2api`/`agy`/`antigravity` model is routable — every
-spelling returns `model_not_found`. Bare `gemini-3.8-flash` belongs to the
-`devin` provider (429 quota), not the bridge.
+After the `openai-compatibility` Antigravity provider was re-enabled
+(`disabled: false`), a live probe through CPA `10.21.1.101:8317` with
+`claude-sonnet-5-5` (unique to the agy2api lane — bare
+`gemini-3.8-flash` belongs to the `devin` provider) confirmed:
 
-→ `OriginalRequest` fallback stays unimplemented on purpose. It is the
-documented escape hatch only if a future live probe proves CPA's
-`Payload` drops a contract field; wiring it blind would bypass any
-CPA-side normalization for no proven benefit.
+- Non-stream `tools` + `tool_choice:auto` + `parallel_tool_calls:false`
+  → response `finish_reason="tool_calls"` with populated
+  `message.tool_calls` (`id`, `type`, `function.name`,
+  `function.arguments`). CPA's inbound parse and outbound write lose
+  nothing.
+- Round-trip: assistant `tool_calls` + `role:"tool"` + `tool_call_id`
+  history accepted upstream (no 422 — agy2api's pending-call validation
+  passed), and the model chained a second tool call correctly.
+- Stream `stream:true`: exactly one `delta.tool_calls` chunk carrying
+  `index`, then `finish_reason="tool_calls"`, then `[DONE]` —
+  byte-faithful pass-through.
+- `agy_tool_execution` travels as an ordinary JSON field through the
+  same path (covered by the unit tests; nothing in CPA's known
+  chat-completions schema would single it out).
+
+→ `OriginalRequest` fallback is definitively **not needed**. It stays
+documented in the handoff as the escape hatch only.
 
 ## Acceptance status
 
@@ -65,9 +75,9 @@ CPA-side normalization for no proven benefit.
 | Plugin preserves request tool fields | ✅ unit-verified (new tests) |
 | Plugin preserves `delta.tool_calls` bytes | ✅ unit-verified |
 | `[DONE]` skipped / `event: error` passed | ✅ unit-verified |
-| CPA `Payload` completeness | ⏳ needs live lane (agy2api provider disabled) |
-| Non-stream `message.tool_calls` round-trip | ⏳ same |
-| Stream pass-through end-to-end | ⏳ same |
+| CPA `Payload` completeness | ✅ live-verified (non-stream + round-trip) |
+| Non-stream `message.tool_calls` round-trip | ✅ live-verified |
+| Stream pass-through end-to-end | ✅ live-verified (`delta.tool_calls` + `[DONE]`) |
 
 ## Install state
 
