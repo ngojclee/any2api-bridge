@@ -533,16 +533,23 @@ func sseEventPayload(block string) ([]byte, bool) {
 	return []byte(joined), true
 }
 
+// streamEmitPayload marshals one upstream event for the host stream bridge.
+// The event stays opaque bytes end to end: the payload field base64-encodes
+// it, so no JSON escaping or field filtering can touch the upstream event.
+func streamEmitPayload(streamID string, event []byte) ([]byte, error) {
+	return json.Marshal(map[string]any{
+		"stream_id": streamID,
+		"payload":   event,
+	})
+}
+
 // emitUpstreamEvents forwards completed upstream events through the host
 // stream bridge in arrival order and reports how many were accepted. ok turns
 // false as soon as the bridge rejects one, so the caller stops emitting
 // instead of spinning against a closed stream.
 func emitUpstreamEvents(streamID string, events [][]byte) (emitted int, ok bool) {
 	for _, event := range events {
-		emitPayload, errMarshal := json.Marshal(map[string]any{
-			"stream_id": streamID,
-			"payload":   event,
-		})
+		emitPayload, errMarshal := streamEmitPayload(streamID, event)
 		if errMarshal != nil {
 			continue
 		}
