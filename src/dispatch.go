@@ -390,32 +390,39 @@ func handleInterceptAfter(request []byte) ([]byte, error) {
 	if !settings.Enabled {
 		return okEnvelope(InterceptResponsePayload{}), nil
 	}
+	var normalizedBody []byte
+	if shouldNormalizeOpenAICallIDs(payload) {
+		if rewritten, changed := normalizeOpenAIRequestCallIDs(payload.Body); changed {
+			normalizedBody = rewritten
+		}
+	}
 	if settings.DirectModeEnabled {
 		account, matched := resolveDirectAccountForPayload(payload, settings)
 		if !matched {
-			return okEnvelope(InterceptResponsePayload{}), nil
+			return okEnvelope(InterceptResponsePayload{Body: normalizedBody}), nil
 		}
 		identity := deriveClientIdentityFromIntercept(payload, settings)
 		if identity.Principal == "" {
 			recordDashboardEvent("warning", "Client request matched a direct account but no stable identity could be derived")
-			return okEnvelope(InterceptResponsePayload{}), nil
+			return okEnvelope(InterceptResponsePayload{Body: normalizedBody}), nil
 		}
 		identity.ProviderName = account.ChannelName
 		candidate := directAccountProviderCandidate(account)
 		recordIntercept(candidate, identity)
 		return okEnvelope(InterceptResponsePayload{
 			Headers: directAccountIdentityHeaders(account, identity, settings, payload),
+			Body:    normalizedBody,
 		}), nil
 	}
 	candidate := candidateFromPayload(payload, settings)
 	matched, _ := settings.shouldInterceptCandidate(candidate)
 	if !matched {
-		return okEnvelope(InterceptResponsePayload{}), nil
+		return okEnvelope(InterceptResponsePayload{Body: normalizedBody}), nil
 	}
 	identity := deriveClientIdentityFromIntercept(payload, settings)
 	if identity.Principal == "" {
 		recordDashboardEvent("warning", "Client request matched the mirrored provider but no stable identity could be derived")
-		return okEnvelope(InterceptResponsePayload{}), nil
+		return okEnvelope(InterceptResponsePayload{Body: normalizedBody}), nil
 	}
 	identity.ProviderName = candidate.Name
 	recordIntercept(candidate, identity)
@@ -423,11 +430,13 @@ func handleInterceptAfter(request []byte) ([]byte, error) {
 	if identityHeaderProfileForCandidate(candidate) == identityHeaderProfileAny2API {
 		return okEnvelope(InterceptResponsePayload{
 			Headers: any2APIIdentityHeaders(identity, settings, candidate),
+			Body:    normalizedBody,
 		}), nil
 	}
 	spec, _ := resolveProviderSpec()
 	return okEnvelope(InterceptResponsePayload{
 		Headers: agyIdentityHeaders(identity, settings, candidate, payload, spec),
+		Body:    normalizedBody,
 	}), nil
 }
 
