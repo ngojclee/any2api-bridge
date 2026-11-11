@@ -30,17 +30,21 @@ type directAccount struct {
 	// "alias" to the operator: scan/upsert never writes it. SingleID drops
 	// the row alias so CPA registers only the wire name — one catalog id
 	// per model, the compat-provider equivalent of "keep original" off.
-	RawNames      bool                 `yaml:"raw_names" json:"raw_names"`
-	ManualAlias   bool                 `yaml:"manual_alias" json:"manual_alias"`
-	SingleID      bool                 `yaml:"single_id" json:"single_id"`
-	AuthID        string               `yaml:"auth_id" json:"auth_id"`
-	APIKey        string               `yaml:"api_key" json:"api_key"`
-	Weight        int                  `yaml:"weight" json:"weight"`
-	ProxyURL      string               `yaml:"proxy_url" json:"proxy_url"`
-	StaticHeaders map[string]string    `yaml:"headers" json:"headers"`
-	Models        []directAccountModel `yaml:"models" json:"models"`
-	weightSet     bool
-	prioritySet   bool
+	// IncludeVariants asks upstreams that group effort levels behind family
+	// ids (agy2api) to also list every flat *-<effort> variant, so a scan
+	// can write each callable route into the provider model table.
+	RawNames        bool                 `yaml:"raw_names" json:"raw_names"`
+	ManualAlias     bool                 `yaml:"manual_alias" json:"manual_alias"`
+	SingleID        bool                 `yaml:"single_id" json:"single_id"`
+	IncludeVariants bool                 `yaml:"include_variants" json:"include_variants"`
+	AuthID          string               `yaml:"auth_id" json:"auth_id"`
+	APIKey          string               `yaml:"api_key" json:"api_key"`
+	Weight          int                  `yaml:"weight" json:"weight"`
+	ProxyURL        string               `yaml:"proxy_url" json:"proxy_url"`
+	StaticHeaders   map[string]string    `yaml:"headers" json:"headers"`
+	Models          []directAccountModel `yaml:"models" json:"models"`
+	weightSet       bool
+	prioritySet     bool
 }
 
 type directAccountModel struct {
@@ -71,6 +75,7 @@ type directAccountView struct {
 	RawNames               bool                      `json:"raw_names"`
 	ManualAlias            bool                      `json:"manual_alias"`
 	SingleID               bool                      `json:"single_id"`
+	IncludeVariants        bool                      `json:"include_variants"`
 	Headers                []directHeaderState       `json:"headers,omitempty"`
 	Models                 []directAccountModelState `json:"models,omitempty"`
 }
@@ -141,6 +146,9 @@ func directAccountFromMap(raw map[string]any) directAccount {
 	}
 	if singleID, ok := boolValue(raw, "single_id", "single-id"); ok {
 		account.SingleID = singleID
+	}
+	if includeVariants, ok := boolValue(raw, "include_variants", "include-variants"); ok {
+		account.IncludeVariants = includeVariants
 	}
 	account.AuthID, _ = stringValue(raw, "auth_id", "auth-id", "selected_auth_id", "selected-auth-id", "cpa_auth_id", "cpa-auth-id")
 	account.APIKey, _ = stringValue(raw, "api_key", "api-key")
@@ -354,8 +362,8 @@ func directAccountModelFromMap(raw map[string]any) directAccountModel {
 			thinking := &thinkingSpec{}
 			thinking.Min, _ = intValue(thinkingMap, "min")
 			thinking.Max, _ = intValue(thinkingMap, "max")
-			thinking.ZeroAllowed, _ = boolValue(thinkingMap, "zero-allowed", "zero_allowed")
-			thinking.DynamicAllowed, _ = boolValue(thinkingMap, "dynamic-allowed", "dynamic_allowed")
+			thinking.ZeroAllowed, _ = boolValue(thinkingMap, "zero-allowed", "zero_allowed", "zeroallowed")
+			thinking.DynamicAllowed, _ = boolValue(thinkingMap, "dynamic-allowed", "dynamic_allowed", "dynamicallowed")
 			thinking.Levels, _ = stringSliceValue(thinkingMap, "levels")
 			model.Thinking = effectiveThinking(thinking)
 		}
@@ -436,6 +444,7 @@ func directAccountReadView(account directAccount) directAccountView {
 		RawNames:               account.RawNames,
 		ManualAlias:            account.ManualAlias,
 		SingleID:               account.SingleID,
+		IncludeVariants:        account.IncludeVariants,
 		Headers:                headers,
 		Models:                 models,
 	}

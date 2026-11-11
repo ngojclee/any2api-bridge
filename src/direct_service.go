@@ -53,6 +53,10 @@ func handleDirectAccountScan(request pluginapi.ManagementRequest) ([]byte, error
 	if !found {
 		return managementJSONResponse(http.StatusNotFound, map[string]string{"error": "direct account not found"}), nil
 	}
+	// Preview honors the same console checkboxes as scan/upsert so the
+	// operator sees exactly what a write would produce; unlike upsert this
+	// override is not persisted.
+	directFlagOverrides(request, &account)
 	status, models, errProbe := scanDirectAccountModels(settings, account)
 	if errProbe != nil {
 		return managementJSONResponse(http.StatusBadGateway, directScanResult{
@@ -120,6 +124,94 @@ func handleDirectAccountSyncProviderModels(request pluginapi.ManagementRequest) 
 		"models":        directModelStates(account.Models),
 		"replaced":      replaced,
 	}), nil
+}
+
+// handleDirectAccountModelRemove deletes one tracked model from the account
+// store and prunes the matching row from the original CPA provider. Stale
+// ("unavailable") models otherwise linger forever, so this is the explicit
+// cleanup path for ids the upstream no longer reports — and for rows the
+// operator simply wants gone. The provider patch is best-effort: when the
+// matching CPA provider cannot be located the store removal still stands and
+// the response says so, because a stale store row must not hold the console
+// hostage to provider state.
+func handleDirectAccountModelRemove(request pluginapi.ManagementRequest) ([]byte, error) {
+	settings := currentPluginSettings()
+	account, found := directAccountFromRequestID(settings, request)
+	if !found {
+		return managementJSONResponse(http.StatusNotFound, map[string]string{"error": "direct account not found"}), nil
+	}
+	upstreamID := strings.TrimSpace(firstRequestQueryValue(request, "upstream_id", "upstream-id", "model", "model_id"))
+	if upstreamID == "" {
+		var payload struct {
+			UpstreamID string `json:"upstream_id"`
+			Model      string `json:"model"`
+			ModelID    string `json:"model_id"`
+		}
+		if errUnmarshal := json.Unmarshal(request.Body, &payload); errUnmarshal == nil {
+			upstreamID = strings.TrimSpace(firstNonEmpty(payload.UpstreamID, payload.Model, payload.ModelID))
+		}
+	}
+	if upstreamID == "" {
+		return managementJSONResponse(http.StatusBadRequest, map[string]string{"error": "upstream_id is required"}), nil
+	}
+	kept := make([]directAccountModel, 0, len(account.Models))
+	removed := ""
+	for _, model := range normalizeDirectAccountModels(account.Models) {
+		if strings.EqualFold(strings.TrimSpace(model.UpstreamID), upstreamID) ||
+			(model.Alias != "" && strings.EqualFold(strings.TrimSpace(model.Alias), upstreamID)) {
+			removed = model.UpstreamID
+			continue
+		}
+		kept = append(kept, model)
+	}
+	if removed == "" {
+		return managementJSONResponse(http.StatusNotFound, map[string]string{"error": "model is not tracked by this account"}), nil
+	}
+	account.Models = kept
+	merged, _ := mergeDirectAccountByID(settings.DirectAccounts, account)
+	if errValidate := validateDirectAccounts(merged); errValidate != nil {
+		return managementJSONResponse(http.StatusConflict, map[string]string{"error": errValidate.Error()}), nil
+	}
+	if _, errStore := storeDirectSettings(&merged, nil); errStore != nil {
+		return managementJSONResponse(http.StatusInternalServerError, map[string]string{"error": errStore.Error()}), nil
+	}
+	providerWritten := false
+	providerError := ""
+	snapshot := currentConfigSnapshot()
+	if snapshot.ConfigPathFound && strings.TrimSpace(snapshot.ConfigPath) != "" {
+		updated, _, errPatch := patchDirectProviderConfig(snapshot.ConfigYAML, account, []string{removed})
+		switch {
+		case errPatch != nil:
+			providerError = errPatch.Error()
+		default:
+			if errWrite := writeCPAConfigFile(snapshot.ConfigPath, updated); errWrite != nil {
+				providerError = errWrite.Error()
+			} else {
+				applyPluginConfiguration(loadPluginConfiguration(updated))
+				storeProviderSpec(providerSpec{}, false)
+				providerWritten = true
+			}
+		}
+	} else {
+		providerError = "mounted CPA config path was not found"
+	}
+	if providerWritten {
+		recordDashboardEvent("success", "Direct account model removed from store and provider")
+	} else {
+		recordDashboardEvent("warning", "Direct account model removed from store only")
+	}
+	result := map[string]any{
+		"ok":               true,
+		"account_id":       account.AccountID,
+		"removed":          removed,
+		"model_count":      len(account.Models),
+		"models":           directModelStates(account.Models),
+		"provider_written": providerWritten,
+	}
+	if providerError != "" {
+		result["provider_error"] = providerError
+	}
+	return managementJSONResponse(http.StatusOK, result), nil
 }
 
 func handleDirectAccountPublish(request pluginapi.ManagementRequest) ([]byte, error) {
@@ -193,15 +285,33 @@ func firstRequestQueryValue(request pluginapi.ManagementRequest, keys ...string)
 }
 
 func scanDirectAccountModels(settings PluginSettings, account directAccount) (int, []modelSpec, error) {
+	apiKeys := []string{account.APIKey}
+	if strings.TrimSpace(account.APIKey) == "" {
+		if root, errParse := parseYAMLMap(currentConfigSnapshot().ConfigYAML); errParse == nil {
+			entries := openAICompatEntries(root)
+			if index := findDirectProviderIndex(entries, account); index >= 0 {
+				if providerKeys := compatAPIKeys(entries[index]); len(providerKeys) > 0 {
+					apiKeys = providerKeys
+				}
+			}
+		}
+	}
 	spec := providerSpec{
 		Name:    account.ChannelName,
 		Prefix:  account.Prefix,
 		BaseURL: account.BaseURL,
-		APIKeys: []string{account.APIKey},
+		APIKeys: apiKeys,
 		Headers: account.StaticHeaders,
 		Models:  directAccountModelSpecs(account),
 	}
-	return probeProviderModelSpecs(spec)
+	// agy2api-style upstreams collapse effort variants into family ids unless
+	// asked otherwise; the flag is opt-in per account. The signed path stays
+	// "/models" — upstream signature verification covers the path only.
+	query := ""
+	if account.IncludeVariants {
+		query = "include_variants=1"
+	}
+	return probeProviderModelSpecs(spec, query)
 }
 
 func mergeDirectCatalogSpecs(models []modelSpec, existing []directAccountModel, limit int) []directAccountModel {

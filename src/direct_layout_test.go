@@ -296,3 +296,124 @@ plugins:
 	missing := decodeManagementReply(t, missingRaw, missingErr)
 	missing.statusIs(t, http.StatusNotFound)
 }
+
+func TestFindDirectProviderIndexFallsBackToUniqueChannelNameWithoutClobberingBaseURL(t *testing.T) {
+	raw := []byte(`api-keys:
+  openai-compatibility:
+    - name: ChatGPT
+      base-url: http://gpt.api.example/v1
+      keys:
+        - api-key: gpt-key
+    - name: Antigravity
+      base-url: http://agy.api.example/v1
+      keys:
+        - api-key: agy-key
+`)
+	account := directAccount{
+		AccountID:   "antigravity",
+		ChannelName: "Antigravity",
+		Prefix:      "antigravity",
+		BaseURL:     "http://198.51.100.101:8123/v1",
+		RawNames:    true,
+		SingleID:    true,
+		Enabled:     true,
+		Models: []directAccountModel{
+			{UpstreamID: "claude-sonnet-5-5", Enabled: true},
+		},
+	}
+	updated, _, errPatch := patchDirectProviderConfig(raw, account, nil)
+	if errPatch != nil {
+		t.Fatalf("patch failed across domain/LAN base-url split: %v", errPatch)
+	}
+	root, errParse := parseYAMLMap(updated)
+	if errParse != nil {
+		t.Fatalf("reparse: %v", errParse)
+	}
+	entries := openAICompatEntries(root)
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 providers, got %d", len(entries))
+	}
+	if gotURL, _ := stringValue(entries[1], "base-url"); gotURL != "http://agy.api.example/v1" {
+		t.Fatalf("provider base-url was clobbered: %q", gotURL)
+	}
+	if models := compatModels(entries[1]); len(models) != 1 || models[0].Name != "claude-sonnet-5-5" {
+		t.Fatalf("bare model was not merged into Antigravity provider: %+v", models)
+	}
+
+	// Duplicate channel names with different non-matching URLs remain ambiguous.
+	ambiguous := []map[string]any{
+		{"name": "Antigravity", "base-url": "http://agy-1.api.example/v1"},
+		{"name": "Antigravity", "base-url": "http://agy-2.api.example/v1"},
+	}
+	if idx := findDirectProviderIndex(ambiguous, account); idx != -1 {
+		t.Fatalf("expected ambiguous duplicate channel names to return -1, got %d", idx)
+	}
+}
+
+func TestResolveDirectAccountMatchesCPAV8CompatAuthIDAndBareModels(t *testing.T) {
+	settings := PluginSettings{
+		Enabled:           true,
+		DirectModeEnabled: true,
+		DirectAccounts: []directAccount{
+			{
+				AccountID:              "chatgpt",
+				ProviderKind:           directProviderGPT,
+				ChannelName:            "ChatGPT",
+				Prefix:                 "chatgpt",
+				BaseURL:                "http://198.51.100.101:8792/v1",
+				Enabled:                true,
+				IdentitySigningEnabled: true,
+				Models: []directAccountModel{
+					{UpstreamID: "chatgpt/gpt-5.4", Enabled: true},
+				},
+			},
+			{
+				AccountID:              "antigravity",
+				ProviderKind:           directProviderAGY,
+				ChannelName:            "Antigravity",
+				Prefix:                 "antigravity",
+				BaseURL:                "http://198.51.100.101:8123/v1",
+				RawNames:               true,
+				SingleID:               true,
+				Enabled:                true,
+				IdentitySigningEnabled: true,
+				Models: []directAccountModel{
+					{UpstreamID: "gemini-3.8-flash", Enabled: true},
+					{UpstreamID: "claude-sonnet-5-5", Enabled: true},
+				},
+			},
+		},
+	}
+
+	// 1. CPA v8 selected_auth_id ("openai-compatibility:antigravity:<hash>") on a bare model.
+	account, ok := resolveDirectAccountForPayload(InterceptRequestPayload{
+		Model:          "gemini-3.8-flash",
+		RequestedModel: "gemini-3.8-flash",
+		Metadata: map[string]any{
+			"selected_auth_id": "openai-compatibility:antigravity:9f3a12bc",
+		},
+	}, settings)
+	if !ok || account.AccountID != "antigravity" {
+		t.Fatalf("expected CPA v8 compat auth_id to match antigravity, got ok=%v account=%+v", ok, account)
+	}
+
+	// 2. Shared bare model routed by CPA to a non-compat OAuth provider ("devin:...") must NOT match.
+	if _, hijacked := resolveDirectAccountForPayload(InterceptRequestPayload{
+		Model:          "gemini-3.8-flash",
+		RequestedModel: "gemini-3.8-flash",
+		Metadata: map[string]any{
+			"selected_auth_id": "devin:team-seat-1",
+		},
+	}, settings); hijacked {
+		t.Fatal("bare model routed to devin OAuth auth_id must not be hijacked by Antigravity direct account")
+	}
+
+	// 3. Bare single_id model without selected_auth_id resolves via unique tracked model fallback.
+	fallback, ok := resolveDirectAccountForPayload(InterceptRequestPayload{
+		Model:          "claude-sonnet-5-5(high)",
+		RequestedModel: "claude-sonnet-5-5(high)",
+	}, settings)
+	if !ok || fallback.AccountID != "antigravity" {
+		t.Fatalf("expected unique bare model fallback to match antigravity, got ok=%v account=%+v", ok, fallback)
+	}
+}

@@ -33,6 +33,14 @@ func resolveDirectAccountForPayload(payload InterceptRequestPayload, settings Pl
 			return account, true
 		}
 	}
+	// When CPA has not bound a conflicting auth id (e.g. an OAuth provider like
+	// "devin:..." that shares a bare model name), allow bare single_id/raw_names
+	// models to resolve to the unique enabled direct account that tracks them.
+	if strings.TrimSpace(candidate.AuthID) == "" {
+		if account, ok := resolveDirectAccountByUniqueModel(payload, settings.DirectAccounts); ok {
+			return account, true
+		}
+	}
 	return directAccount{}, false
 }
 
@@ -40,11 +48,86 @@ func directAccountMatchesCandidate(account directAccount, candidate providerCand
 	if account.AuthID != "" && candidate.AuthID != "" && strings.EqualFold(account.AuthID, candidate.AuthID) {
 		return true
 	}
+	if compatChannel := compatAuthChannelName(candidate.AuthID); compatChannel != "" {
+		if strings.EqualFold(compatChannel, account.ChannelName) ||
+			strings.EqualFold(compatChannel, account.Prefix) ||
+			strings.EqualFold(compatChannel, account.AccountID) {
+			return true
+		}
+	}
 	for _, value := range []string{candidate.Name, candidate.ProviderKey, candidate.ResolvedPrefix} {
 		if strings.EqualFold(strings.TrimSpace(value), account.ChannelName) ||
 			strings.EqualFold(strings.TrimSpace(value), account.Prefix) ||
 			strings.EqualFold(strings.TrimSpace(value), account.AccountID) {
 			return true
+		}
+	}
+	return false
+}
+
+// compatAuthChannelName extracts the provider name from CPA v8's
+// "openai-compatibility:<channel>:<hash>" selected_auth_id format.
+func compatAuthChannelName(authID string) string {
+	trimmed := strings.TrimSpace(authID)
+	lower := strings.ToLower(trimmed)
+	for _, prefix := range []string{"openai-compatibility:", "openai_compatibility:"} {
+		if strings.HasPrefix(lower, prefix) {
+			rest := trimmed[len(prefix):]
+			if sep := strings.IndexByte(rest, ':'); sep >= 0 {
+				rest = rest[:sep]
+			}
+			return strings.TrimSpace(rest)
+		}
+	}
+	return ""
+}
+
+func resolveDirectAccountByUniqueModel(payload InterceptRequestPayload, accounts []directAccount) (directAccount, bool) {
+	for _, rawModel := range []string{payload.RequestedModel, payload.Model} {
+		rawTarget := strings.ToLower(strings.TrimSpace(rawModel))
+		if rawTarget == "" {
+			continue
+		}
+		baseModel, _ := normalizeThinkingModelName(rawModel)
+		baseTarget := strings.ToLower(strings.TrimSpace(baseModel))
+		var matched directAccount
+		count := 0
+		for _, account := range accounts {
+			account = normalizeDirectAccount(account)
+			if !account.Enabled {
+				continue
+			}
+			if directAccountTracksModel(account, rawTarget, baseTarget) {
+				matched = account
+				count++
+				if count > 1 {
+					break
+				}
+			}
+		}
+		if count == 1 {
+			return matched, true
+		}
+	}
+	return directAccount{}, false
+}
+
+func directAccountTracksModel(account directAccount, rawTarget, baseTarget string) bool {
+	for _, model := range normalizeDirectAccountModels(account.Models) {
+		if !model.Enabled || model.Unavailable || strings.TrimSpace(model.UpstreamID) == "" {
+			continue
+		}
+		candidates := []string{
+			strings.ToLower(strings.TrimSpace(model.UpstreamID)),
+			strings.ToLower(strings.TrimSpace(trimDirectAliasPrefix(account.Prefix, model.UpstreamID))),
+		}
+		if !account.SingleID && strings.TrimSpace(model.Alias) != "" {
+			candidates = append(candidates, strings.ToLower(strings.TrimSpace(model.Alias)))
+		}
+		for _, candidate := range candidates {
+			if candidate != "" && (candidate == rawTarget || (baseTarget != "" && candidate == baseTarget)) {
+				return true
+			}
 		}
 	}
 	return false

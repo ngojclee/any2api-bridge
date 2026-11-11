@@ -41,7 +41,7 @@ openai-compatibility:
 		weightSet:   true,
 		prioritySet: true,
 	}
-	updated, changed, errPatch := patchDirectProviderConfig(raw, account)
+	updated, changed, errPatch := patchDirectProviderConfig(raw, account, nil)
 	if errPatch != nil {
 		t.Fatal(errPatch)
 	}
@@ -123,7 +123,7 @@ openai-compatibility:
 		ProxyURL:     "http://proxy.example:8080",
 		weightSet:    true,
 	}
-	updated, _, errPatch := patchDirectProviderConfig(raw, account)
+	updated, _, errPatch := patchDirectProviderConfig(raw, account, nil)
 	if errPatch != nil {
 		t.Fatal(errPatch)
 	}
@@ -262,7 +262,7 @@ openai-compatibility:
 			{UpstreamID: "gemini-3.8-flash", Enabled: true},
 		},
 	}
-	updated, _, errPatch := patchDirectProviderConfig(raw, account)
+	updated, _, errPatch := patchDirectProviderConfig(raw, account, nil)
 	if errPatch != nil {
 		t.Fatal(errPatch)
 	}
@@ -297,7 +297,7 @@ openai-compatibility:
 		BaseURL:      "https://agy.example/v1",
 		Enabled:      true,
 	}
-	updated, changed, errPatch := patchDirectProviderConfig(raw, account)
+	updated, changed, errPatch := patchDirectProviderConfig(raw, account, nil)
 	if errPatch != nil {
 		t.Fatal(errPatch)
 	}
@@ -311,7 +311,7 @@ openai-compatibility:
 	}
 
 	account.Prefix = ""
-	updated, changed, errPatch = patchDirectProviderConfig(updated, account)
+	updated, changed, errPatch = patchDirectProviderConfig(updated, account, nil)
 	if errPatch != nil {
 		t.Fatal(errPatch)
 	}
@@ -360,7 +360,7 @@ openai-compatibility:
 			{UpstreamID: "gemini-3.7-flash", Alias: "antigravity/gemini-3.7-flash", Enabled: true},
 		},
 	}
-	updated, _, errPatch := patchDirectProviderConfig(raw, account)
+	updated, _, errPatch := patchDirectProviderConfig(raw, account, nil)
 	if errPatch != nil {
 		t.Fatal(errPatch)
 	}
@@ -408,7 +408,7 @@ openai-compatibility:
 			{UpstreamID: "chatgpt-web/gpt-5.5-high", Enabled: true, Unavailable: true},
 		},
 	}
-	updated, _, errPatch := patchDirectProviderConfig(raw, account)
+	updated, _, errPatch := patchDirectProviderConfig(raw, account, nil)
 	if errPatch != nil {
 		t.Fatal(errPatch)
 	}
@@ -533,7 +533,7 @@ openai-compatibility:
 			{UpstreamID: "gemini-3.7-flash", Alias: "antigravity/gemini-3.7-flash", Enabled: true},
 		},
 	}
-	updated, _, errPatch := patchDirectProviderConfig(raw, account)
+	updated, _, errPatch := patchDirectProviderConfig(raw, account, nil)
 	if errPatch != nil {
 		t.Fatal(errPatch)
 	}
@@ -580,7 +580,7 @@ openai-compatibility:
 			{UpstreamID: "gemini-3.7-flash", Alias: "antigravity/gemini-3.7-flash", Enabled: true},
 		},
 	}
-	updated, _, errPatch := patchDirectProviderConfig(raw, account)
+	updated, _, errPatch := patchDirectProviderConfig(raw, account, nil)
 	if errPatch != nil {
 		t.Fatal(errPatch)
 	}
@@ -626,7 +626,7 @@ openai-compatibility:
 			{UpstreamID: "gemini-3.8-flash", Enabled: true},
 		},
 	}
-	updated, _, errPatch := patchDirectProviderConfig(raw, account)
+	updated, _, errPatch := patchDirectProviderConfig(raw, account, nil)
 	if errPatch != nil {
 		t.Fatal(errPatch)
 	}
@@ -647,7 +647,7 @@ openai-compatibility:
 
 	// With raw_names the single visible id is the bare upstream id.
 	account.RawNames = true
-	updated, _, errPatch = patchDirectProviderConfig(raw, account)
+	updated, _, errPatch = patchDirectProviderConfig(raw, account, nil)
 	if errPatch != nil {
 		t.Fatal(errPatch)
 	}
@@ -679,7 +679,7 @@ openai-compatibility:
 			{UpstreamID: "chatgpt/gpt-5.5-high", Enabled: true},
 		},
 	}
-	updated, _, errPatch := patchDirectProviderConfig(raw, account)
+	updated, _, errPatch := patchDirectProviderConfig(raw, account, nil)
 	if errPatch != nil {
 		t.Fatal(errPatch)
 	}
@@ -696,7 +696,7 @@ openai-compatibility:
 	}
 	// Rescan must match the bare row by the stripped upstream id, not
 	// append a duplicate.
-	updated, _, errPatch = patchDirectProviderConfig(updated, account)
+	updated, _, errPatch = patchDirectProviderConfig(updated, account, nil)
 	if errPatch != nil {
 		t.Fatal(errPatch)
 	}
@@ -710,20 +710,20 @@ openai-compatibility:
 func TestDirectAccountReadViewExposesModelFlags(t *testing.T) {
 	view := directAccountReadView(directAccount{
 		AccountID: "agy", ChannelName: "Antigravity", Prefix: "antigravity",
-		RawNames: true, ManualAlias: true, SingleID: true,
+		RawNames: true, ManualAlias: true, SingleID: true, IncludeVariants: true,
 	})
-	if !view.RawNames || !view.ManualAlias || !view.SingleID {
+	if !view.RawNames || !view.ManualAlias || !view.SingleID || !view.IncludeVariants {
 		t.Fatalf("read view dropped model flags: %+v", view)
 	}
 }
 
 func TestDirectFlagOverridesReadsJSONBody(t *testing.T) {
 	request := pluginapi.ManagementRequest{
-		Body: []byte(`{"account_id":"agy-prod","raw_names":"1","manual_alias":"0","single_id":"1"}`),
+		Body: []byte(`{"account_id":"agy-prod","raw_names":"1","manual_alias":"0","single_id":"1","include_variants":"1"}`),
 	}
 	account := directAccount{AccountID: "agy-prod", ManualAlias: true}
 	directFlagOverrides(request, &account)
-	if !account.RawNames || account.ManualAlias || !account.SingleID {
+	if !account.RawNames || account.ManualAlias || !account.SingleID || !account.IncludeVariants {
 		t.Fatalf("json body flags not applied: %+v", account)
 	}
 	// Boolean JSON values and query values must work too.
@@ -743,13 +743,14 @@ func TestDirectFlagOverridesReadsJSONBody(t *testing.T) {
 
 func TestDirectAccountModelFlagsPersistThroughConfigProjection(t *testing.T) {
 	account := directAccount{
-		AccountID:   "agy-prod",
-		ChannelName: "Antigravity",
-		Prefix:      "antigravity",
-		Enabled:     true,
-		RawNames:    true,
-		ManualAlias: true,
-		SingleID:    true,
+		AccountID:       "agy-prod",
+		ChannelName:     "Antigravity",
+		Prefix:          "antigravity",
+		Enabled:         true,
+		RawNames:        true,
+		ManualAlias:     true,
+		SingleID:        true,
+		IncludeVariants: true,
 	}
 	entries := directAccountsForConfig([]directAccount{account})
 	if len(entries) != 1 {
@@ -759,11 +760,11 @@ func TestDirectAccountModelFlagsPersistThroughConfigProjection(t *testing.T) {
 	if !ok {
 		t.Fatalf("projected entry is not a map: %#v", entries[0])
 	}
-	if entry["raw_names"] != true || entry["manual_alias"] != true || entry["single_id"] != true {
+	if entry["raw_names"] != true || entry["manual_alias"] != true || entry["single_id"] != true || entry["include_variants"] != true {
 		t.Fatalf("model flags missing from config projection: %#v", entry)
 	}
 	parsed := directAccountFromMap(entry)
-	if !parsed.RawNames || !parsed.ManualAlias || !parsed.SingleID {
+	if !parsed.RawNames || !parsed.ManualAlias || !parsed.SingleID || !parsed.IncludeVariants {
 		t.Fatalf("model flags did not round-trip: %+v", parsed)
 	}
 }
